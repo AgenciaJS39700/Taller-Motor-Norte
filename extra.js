@@ -7,21 +7,6 @@
   var esc = function (t) { return String(t).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); };
   var wa = function (t) { return "https://wa.me/" + (S.wa || "") + "?text=" + encodeURIComponent(t); };
 
-  /* ---------- Parallax suave de la banda ---------- */
-  var band = $(".xb"), bimg = band && $(".xb-im img", band);
-  if (bimg && !reduce) {
-    var tick = false;
-    var move = function () {
-      tick = false;
-      var r = band.getBoundingClientRect(), vh = window.innerHeight;
-      if (r.bottom < 0 || r.top > vh) return;
-      var p = (r.top + r.height / 2 - vh / 2) / (vh + r.height);
-      bimg.style.transform = "translate3d(0," + (p * -16).toFixed(2) + "%,0)";
-    };
-    window.addEventListener("scroll", function () { if (!tick) { tick = true; requestAnimationFrame(move); } }, { passive: true });
-    move();
-  }
-
   /* ---------- Testigos del salpicadero ---------- */
   var ICON = {
     motor: '<path d="M10 26h6v-6h8l4-4h12v6h6l4 6h4v14h-4l-4 6H28l-6-6h-6v-6h-6z"/><path d="M24 16v-4h12v4"/>',
