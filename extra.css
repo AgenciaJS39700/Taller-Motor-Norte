@@ -84,3 +84,13 @@
 .hero-a .chip-f{z-index:3}
 .hero-a{overflow:visible}
 @media(max-width:600px){.hero-a .ph-it{width:26%!important}}
+/* Servicios en 2 columnas en móvil */
+@media(max-width:600px){
+ .m2 .pc{padding:.6rem;border-radius:16px}
+ .m2 .pc .im{aspect-ratio:1/1;border-radius:12px}
+ .m2 .pc .tg{top:.95rem;left:.95rem;font-size:.6rem;padding:.18rem .5rem}
+ .m2 .pc h3{font-size:.95rem;margin-top:.55rem}
+ .m2 .pc p{font-size:.8rem;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+ .m2 .pc .bt{margin-top:.55rem;gap:.45rem;flex-direction:column;align-items:stretch}
+ .m2 .pc .bt .add{justify-content:center;min-height:40px;padding:.4rem .6rem;font-size:.85rem}
+}
