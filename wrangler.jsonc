@@ -1,5 +1,12 @@
 {
-  "name": "taller-demo",
-  "compatibility_date": "2026-01-01",
-  "assets": { "directory": "./" }
+  // Taller Motor Norte · demo de taller mecánico. Cloudflare Workers Builds publica cada push a main.
+  // worker.js responde /api/* (citas, seguimiento, panel del taller); el resto son los archivos de la web.
+  "name": "taller-motor-norte",
+  "main": "worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./", "binding": "ASSETS", "run_worker_first": ["/api/*"] },
+  "d1_databases": [
+    { "binding": "DB", "database_name": "taller-motor-norte", "database_id": "107dd955-1fd7-4194-858f-5846b786db70" }
+  ],
+  "observability": { "enabled": true }
 }

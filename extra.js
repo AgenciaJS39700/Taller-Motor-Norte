@@ -1,4 +1,4 @@
-/* /extra.js — Taller Motor Norte: parallax de la banda, testigos del salpicadero y seguimiento de la reparación (demo, sin servidor) */
+/* /extra.js — Taller Motor Norte: parallax de la banda, testigos del salpicadero y seguimiento de la reparación (datos reales del panel del taller) */
 (function () {
   "use strict";
   var S = window.SITE || {};
@@ -48,45 +48,54 @@
   /* ---------- Seguimiento de la reparación ---------- */
   var trk = $("#trk");
   if (trk) {
-    var STEPS = [
-      ["Recibido en el taller", "Hoy 08:42 · Kilómetros: 98.420"],
-      ["Diagnóstico", "Diagnosis y prueba en carretera"],
-      ["Presupuesto enviado", "Esperando tu aprobación"],
-      ["En reparación", "Nuestro mecánico está trabajando"],
-      ["Listo para recoger", "Lavado de cortesía incluido"]
-    ];
-    var BUD = [["Pastillas delanteras", 72], ["Discos delanteros (par)", 98], ["Líquido de frenos", 24], ["Mano de obra (1,2 h)", 54]];
-    var total = BUD.reduce(function (a, b) { return a + b[1]; }, 0);
-    trk.innerHTML = '<form class="trk-f" id="trkf" novalidate><label class="plate"><span>E</span><input id="mat" maxlength="8" autocomplete="off" autocapitalize="characters" placeholder="1234 KLM" aria-label="Matrícula"></label><button class="btn btn-main" type="submit">Ver mi coche</button><button class="btn btn-ghost" type="button" id="trkd">Probar la demo</button></form><p class="stt" id="trks" role="status"></p>' +
-      '<div class="trk-c" id="trkc"><div class="trk-ph"><img src="img/frenos-m.webp" alt="Foto del diagnóstico: disco y pinza de freno" loading="lazy" decoding="async"><span class="live"><i></i>Foto del mecánico</span></div><div class="trk-b"><div><h3 id="trkt"></h3><div class="eta"><span>Mecánico: <b>Javi</b></span><span>Entrega estimada: <b id="eta">hoy 18:30</b></span></div></div><div class="bar" aria-hidden="true"><i id="trkbar"></i></div><div class="stps" id="stps"></div><div id="bud"></div></div></div>';
-    var cur = 0, plate = "";
+    /* Datos reales: el taller mueve cada paso desde su panel y aquí se ve al momento (/api/seguimiento). */
+    trk.innerHTML = '<form class="trk-f" id="trkf" novalidate><label class="plate"><span>E</span><input id="mat" maxlength="9" autocomplete="off" autocapitalize="characters" placeholder="1234 KLM" aria-label="Matrícula"></label><button class="btn btn-main" type="submit">Ver mi coche</button><button class="btn btn-ghost" type="button" id="trkd">Probar la demo</button></form><p class="stt" id="trks" role="status" aria-live="polite"></p>' +
+      '<div class="trk-c" id="trkc"><div class="trk-ph"><img id="trkimg" src="img/frenos-m.webp" alt="Foto del mecánico" loading="lazy" decoding="async"><span class="live"><i></i>Foto del mecánico</span></div><div class="trk-b"><div><h3 id="trkt"></h3><div class="eta"><span>Mecánico: <b id="mec"></b></span><span>Entrega estimada: <b id="eta"></b></span></div><p class="trk-n" id="trkn"></p></div><div class="bar" aria-hidden="true"><i id="trkbar"></i></div><div class="stps" id="stps"></div><div id="bud"></div></div></div>';
+    var plate = "", R = null, timer = 0;
+    var eur = function (n) { return Number(n || 0).toLocaleString("es-ES", { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + " €"; };
     var draw = function () {
-      $("#trkt").textContent = "Seat León · " + plate;
-      $("#trkbar").style.width = (cur / (STEPS.length - 1) * 100) + "%";
-      $("#stps").innerHTML = STEPS.map(function (s, i) {
-        return '<div class="stp2 ' + (i < cur ? "done" : i === cur ? "now" : "") + '"><span class="dot">' + (i < cur ? "✓" : i + 1) + "</span><span><b>" + esc(s[0]) + "</b><small>" + esc(i === 2 && cur > 2 ? "Aprobado por ti" : s[1]) + "</small></span></div>";
+      var r = R, cur = Math.min(r.paso, 4);
+      $("#trkt").textContent = (r.vehiculo || "Tu coche") + " · " + r.matricula;
+      $("#mec").textContent = r.mecanico || "—";
+      $("#eta").textContent = r.entrega || "te avisamos";
+      $("#trkn").textContent = r.nota || "";
+      if (r.foto) { $("#trkimg").src = r.foto; }
+      $("#trkbar").style.width = (cur / 4 * 100) + "%";
+      $("#stps").innerHTML = r.pasos.map(function (s, i) {
+        var h = (r.historial || []).filter(function (x) { return x.p === i; }).pop();
+        var sub = i === 2 && r.aprobado ? "Aprobado" : h ? h.t.slice(11) + (h.t.slice(0, 10) === new Date().toISOString().slice(0, 10) ? " · hoy" : " · " + h.t.slice(8, 10) + "/" + h.t.slice(5, 7)) : "";
+        return '<div class="stp2 ' + (i < cur ? "done" : i === cur ? "now" : "") + '"><span class="dot">' + (i < cur ? "✓" : i + 1) + "</span><span><b>" + esc(s) + "</b><small>" + esc(sub) + "</small></span></div>";
       }).join("");
       var b = $("#bud");
-      if (cur === 2) {
-        b.innerHTML = '<div class="bud">' + BUD.map(function (x) { return "<div><span>" + esc(x[0]) + "</span><span>" + x[1] + " €</span></div>"; }).join("") + "<div><span>Total cerrado (IVA incl.)</span><span>" + total + ' €</span></div></div><div class="trk-a" style="margin-top:.8rem"><button class="btn btn-main" type="button" id="apr">Aprobar presupuesto</button><a class="btn btn-ghost" target="_blank" rel="noopener" href="' + wa("Hola, tengo una duda sobre el presupuesto del coche " + plate) + '">Tengo una duda</a></div>';
-        $("#apr").addEventListener("click", function () { cur = 3; draw(); setTimeout(function () { if (cur === 3) { cur = 4; draw(); } }, reduce ? 300 : 4200); });
-      } else if (cur === 4) {
-        b.innerHTML = '<div class="trk-a"><a class="btn btn-wa" target="_blank" rel="noopener" href="' + wa("Hola, paso a recoger el coche " + plate) + '">' + (S.icons && S.icons.wa || "") + "Avisar de que voy</a></div>";
-        $("#eta").textContent = "¡ya está listo!";
+      if (r.paso === 2 && !r.aprobado && r.presupuesto.length) {
+        b.innerHTML = '<div class="bud">' + r.presupuesto.map(function (x) { return "<div><span>" + esc(x.c) + "</span><span>" + eur(x.i) + "</span></div>"; }).join("") + "<div><span>Total cerrado (IVA incl.)</span><span>" + eur(r.total) + '</span></div></div>' +
+          '<form class="apr" id="aprf" novalidate><label for="t4">Para aprobarlo, escribe las 4 últimas cifras de tu teléfono</label><div class="trk-a" style="margin-top:.4rem"><input id="t4" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000"><button class="btn btn-main" type="submit">Aprobar presupuesto</button><a class="btn btn-ghost" target="_blank" rel="noopener" href="' + wa("Hola, tengo una duda sobre el presupuesto del coche " + r.matricula) + '">Tengo una duda</a></div>' + (window.TMN_DEMO ? '<small class="hint">Demo: las cifras son 4719.</small>' : "") + '<p class="stt" id="aprs" role="alert"></p></form>';
+        $("#aprf").addEventListener("submit", function (e) {
+          e.preventDefault(); var t4 = $("#t4").value.replace(/\D/g, ""), st = $("#aprs");
+          if (t4.length !== 4) { st.textContent = "Escribe 4 cifras."; return; }
+          var bt = $("#aprf .btn-main"); bt.disabled = true; st.textContent = "Enviando…";
+          fetch("/api/seguimiento/aprobar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ m: plate, tel4: t4 }) })
+            .then(function (x) { return x.json().then(function (j) { if (!x.ok) throw new Error(j.error || "No se ha podido aprobar."); return j; }); })
+            .then(function (j) { R = j.reparacion; draw(); $("#trks").textContent = "¡Presupuesto aprobado! Ya estamos trabajando en tu coche."; })
+            .catch(function (x) { st.textContent = /fetch|network/i.test(x.message) ? "No se ha podido conectar. Inténtalo de nuevo." : x.message; bt.disabled = false; });
+        });
+      } else if (r.paso === 4) {
+        b.innerHTML = '<div class="trk-a"><a class="btn btn-wa" target="_blank" rel="noopener" href="' + wa("Hola, paso a recoger el coche " + r.matricula) + '">' + (S.icons && S.icons.wa || "") + "Avisar de que voy</a></div>";
       } else b.innerHTML = "";
     };
-    var start = function (p) {
-      plate = p; cur = 0; $("#trkc").classList.add("on"); $("#trks").textContent = "Demo: así sigue el cliente su reparación en directo."; $("#eta").textContent = "hoy 18:30"; draw();
-      setTimeout(function () { cur = 1; draw(); }, reduce ? 200 : 1400);
-      setTimeout(function () { cur = 2; draw(); }, reduce ? 400 : 3000);
+    var cargar = function (p, silencio) {
+      plate = p; if (!silencio) $("#trks").textContent = "Buscando tu coche…";
+      return fetch("/api/seguimiento?m=" + encodeURIComponent(p)).then(function (x) { return x.json().then(function (j) { if (!x.ok) throw new Error(j.error || "No encontrado."); return j; }); })
+        .then(function (j) { R = j.reparacion; $("#trkc").classList.add("on"); if (!silencio) $("#trks").textContent = R.paso >= 4 ? "Tu coche está listo." : "Se actualiza solo: no hace falta recargar."; draw();
+          clearInterval(timer); timer = setInterval(function () { if (!document.hidden && document.contains(trk)) cargar(plate, true).catch(function () {}); }, 30000); })
+        .catch(function (x) { if (silencio) return; $("#trkc").classList.remove("on"); clearInterval(timer); $("#trks").textContent = /fetch|network|JSON/i.test(x.message) ? "No se ha podido conectar con el taller. Inténtalo en un momento." : x.message; });
     };
     $("#trkf").addEventListener("submit", function (e) {
       e.preventDefault();
       var v = $("#mat").value.toUpperCase().replace(/[^0-9A-Z]/g, "");
-      var m = v.match(/^(\d{4})([A-Z]{3})$/);
-      if (!m) { $("#trks").textContent = "Escribe una matrícula como 1234 KLM o pulsa «Probar la demo»."; return; }
-      start(m[1] + " " + m[2]);
+      if (!/^\d{4}[A-Z]{3}$/.test(v) && !/^[A-Z]{1,2}\d{4}[A-Z]{0,2}$/.test(v)) { $("#trks").textContent = "Escribe una matrícula como 1234 KLM o pulsa «Probar la demo»."; return; }
+      cargar(v);
     });
-    $("#trkd").addEventListener("click", function () { $("#mat").value = "1234 KLM"; start("1234 KLM"); });
+    $("#trkd").addEventListener("click", function () { $("#mat").value = "1234 KLM"; cargar("1234KLM"); });
   }
 })();
