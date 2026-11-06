@@ -12,6 +12,7 @@ Demo de taller mecánico de Agencia JS. Se publica sola en Cloudflare Workers ca
   - servicios editables (precio, especificaciones, fotos);
   - facturas numeradas por año;
   - resumen de ventas.
+- **Idiomas** (`i18n.js` + `i18n/*.js`): la web y el asistente en 8 idiomas (español, català, euskara, galego, English, Français, Deutsch, Italiano). Botón 🌐 arriba; recuerda la elección y la primera vez usa el idioma del móvil. Cada idioma es un diccionario «texto en español → traducción». El panel y las facturas siguen en español.
 - **Panel del taller** (`admin.html` + `admin.js`): se entra por el candado del pie de la web.
   - **Resumen**: ventas del periodo, días y meses más fuertes, tipos de trabajo y formas de pago.
   - **Citas**: confirmar, hecha, no vino, anular, editar, WhatsApp al cliente; capacidad y festivos.

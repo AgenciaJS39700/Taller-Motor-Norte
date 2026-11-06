@@ -9,7 +9,8 @@
   var eur = function (n) { return Number(n || 0).toLocaleString("es-ES", { maximumFractionDigits: 2 }) + " €"; };
   var DIAS = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"];
   var iso = function (d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); };
-  var bonita = function (f) { var d = new Date(f + "T12:00:00"); return DIAS[d.getDay()] + " " + d.getDate() + " de " + d.toLocaleDateString("es-ES", { month: "long" }); };
+  var I18 = window.I18N || { lang: "es" };
+  var bonita = function (f) { var d = new Date(f + "T12:00:00"); if (I18.lang !== "es") return d.toLocaleDateString(I18.locale, { weekday: "long", day: "numeric", month: "long" }); return DIAS[d.getDay()] + " " + d.getDate() + " de " + d.toLocaleDateString("es-ES", { month: "long" }); };
   window.TMN = { esc: esc, eur: eur, iso: iso, bonita: bonita, servicios: [] };
 
   function img(s) {
@@ -29,7 +30,7 @@
   }
   function opcionesServicio(lista) {
     var sel = $("#f-tipo"); if (!sel) return;
-    sel.innerHTML = '<option value="">Elige un servicio…</option>' + lista.map(function (s) { return "<option>" + esc(s.nombre) + "</option>"; }).join("") + "<option>Otra cosa (cuéntanos abajo)</option>";
+    sel.innerHTML = '<option value="">Elige un servicio…</option>' + lista.map(function (s) { return '<option value="' + esc(s.nombre) + '">' + esc(s.nombre) + "</option>"; }).join("") + '<option value="Otra cosa">Otra cosa (cuéntanos abajo)</option>';
   }
 
   /* «Reservar» en una tarjeta: abre el asistente con ese servicio o, si no está, rellena el formulario */
