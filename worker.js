@@ -11,11 +11,14 @@
    Panel del taller (/api/admin/*, con sesión):
      login · salir · yo · resumen · citas · citas/guardar · citas/config · reparaciones · reparaciones/guardar
      reparaciones/paso · reparaciones/borrar · facturas · facturas/nueva · facturas/anular · servicios
-     servicios/guardar · servicios/borrar · servicios/foto · misdatos
+     servicios/guardar · servicios/borrar · servicios/foto · misdatos · clientes · ficha · vehiculos/guardar
+     recordatorios · recordatorios/hecho · presupuestos · presupuestos/guardar · presupuestos/estado · presupuestos/facturar
+     facturas/rectificar · horas · horas/nueva · horas/borrar · caja · caja/cerrar
    Contraseña del panel: secreto ADMIN_HASH (sha256 de la contraseña). Sin él, la demo usa «taller-demo»
    y se rellena con datos de ejemplo (facturas de los últimos 14 meses, citas y reparaciones). */
 
 const te = new TextEncoder();
+const FACTURAS_SQL = "CREATE TABLE IF NOT EXISTS facturas (id INTEGER PRIMARY KEY AUTOINCREMENT, serie TEXT DEFAULT 'F', anio INTEGER, numero INTEGER, fecha TEXT, hora TEXT, cliente TEXT, cliente_nif TEXT, cliente_dir TEXT, telefono TEXT, vehiculo TEXT, matricula TEXT, lineas TEXT, base REAL, iva REAL, total REAL, pct REAL, metodo TEXT, servicio TEXT, anulada INTEGER DEFAULT 0, rectifica INTEGER, rectificada INTEGER DEFAULT 0, motivo TEXT, creada TEXT DEFAULT (datetime('now')), UNIQUE (serie, anio, numero))";
 const PASOS = ["Recibido en el taller", "Diagnóstico", "Presupuesto enviado", "En reparación", "Listo para recoger", "Entregado"];
 const CATS = { mant: "Mantenimiento", seg: "Seguridad", elec: "Electrónica y confort" };
 const HORARIO = [[["08:30", "13:30"], ["15:30", "19:30"]], [["08:30", "13:30"], ["15:30", "19:30"]], [["08:30", "13:30"], ["15:30", "19:30"]], [["08:30", "13:30"], ["15:30", "19:30"]], [["08:30", "13:30"], ["15:30", "19:30"]], [["09:00", "13:00"]], []];
@@ -85,9 +88,24 @@ async function preparar(env) {
     env.DB.prepare("CREATE INDEX IF NOT EXISTS citas_f ON citas (fecha, hora)"),
     env.DB.prepare("CREATE TABLE IF NOT EXISTS reparaciones (id INTEGER PRIMARY KEY AUTOINCREMENT, matricula TEXT, vehiculo TEXT, cliente TEXT, tel4 TEXT, mecanico TEXT, paso INTEGER DEFAULT 0, nota TEXT, entrega TEXT, presupuesto TEXT, aprobado INTEGER DEFAULT 0, foto TEXT, historial TEXT, activa INTEGER DEFAULT 1, actualizada TEXT)"),
     env.DB.prepare("CREATE INDEX IF NOT EXISTS rep_m ON reparaciones (matricula, activa)"),
-    env.DB.prepare("CREATE TABLE IF NOT EXISTS facturas (id INTEGER PRIMARY KEY AUTOINCREMENT, anio INTEGER, numero INTEGER, fecha TEXT, hora TEXT, cliente TEXT, cliente_nif TEXT, cliente_dir TEXT, vehiculo TEXT, lineas TEXT, base REAL, iva REAL, total REAL, pct REAL, metodo TEXT, servicio TEXT, anulada INTEGER DEFAULT 0, creada TEXT DEFAULT (datetime('now')), UNIQUE (anio, numero))"),
-    env.DB.prepare("CREATE INDEX IF NOT EXISTS fac_f ON facturas (fecha)"),
+    env.DB.prepare(FACTURAS_SQL),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS vehiculos (matricula TEXT PRIMARY KEY, vehiculo TEXT, cliente TEXT, telefono TEXT, itv TEXT, km INTEGER, notas TEXT, aviso_itv TEXT, aviso_rev TEXT, creado TEXT DEFAULT (datetime('now')))"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS presupuestos (id INTEGER PRIMARY KEY AUTOINCREMENT, anio INTEGER, numero INTEGER, fecha TEXT, cliente TEXT, telefono TEXT, vehiculo TEXT, matricula TEXT, lineas TEXT, total REAL, validez INTEGER DEFAULT 30, estado TEXT DEFAULT 'abierto', factura_id INTEGER, creado TEXT DEFAULT (datetime('now')), UNIQUE (anio, numero))"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS horas (id INTEGER PRIMARY KEY AUTOINCREMENT, fecha TEXT, mecanico TEXT, matricula TEXT, horas REAL, trabajo TEXT, creado TEXT DEFAULT (datetime('now')))"),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS cierres (fecha TEXT PRIMARY KEY, datos TEXT, contado REAL, diferencia REAL, notas TEXT, creado TEXT DEFAULT (datetime('now')))"),
   ]);
+  // las bases creadas con la primera versión no tenían serie (rectificativas), teléfono ni matrícula en las facturas: se reconstruye la tabla
+  const cols = (await env.DB.prepare("PRAGMA table_info(facturas)").all()).results.map((c) => c.name);
+  if (!cols.includes("serie")) {
+    await env.DB.batch([
+      env.DB.prepare("ALTER TABLE facturas RENAME TO facturas_v1"),
+      env.DB.prepare(FACTURAS_SQL),
+      env.DB.prepare("INSERT INTO facturas (id, serie, anio, numero, fecha, hora, cliente, cliente_nif, cliente_dir, vehiculo, lineas, base, iva, total, pct, metodo, servicio, anulada, creada) SELECT id, 'F', anio, numero, fecha, hora, cliente, cliente_nif, cliente_dir, vehiculo, lineas, base, iva, total, pct, metodo, servicio, anulada, creada FROM facturas_v1"),
+      env.DB.prepare("DROP TABLE facturas_v1"),
+    ]);
+  }
+  await env.DB.batch([env.DB.prepare("CREATE INDEX IF NOT EXISTS fac_f ON facturas (fecha)"), env.DB.prepare("CREATE INDEX IF NOT EXISTS fac_m ON facturas (matricula)")]);
+  try { await env.DB.prepare("ALTER TABLE reparaciones ADD COLUMN telefono TEXT").run(); } catch {}
   await sembrar(env);
   preparado = true;
 }
@@ -103,6 +121,14 @@ const SERVICIOS = [
   ["diagnosis", "Diagnosis electrónica", "elec", "Lectura de averías y borrado de testigos.", "Lectura de la centralita\nInforme con fotos por WhatsApp\nSe descuenta si haces la reparación", 35, "", "img/diagnosis"],
 ];
 
+// coches de ejemplo que vuelven al taller (fichas de cliente, recordatorios y facturas)
+function flota() {
+  const r = azarFijo("tmn-flota"), NOM = ["Laura", "Javier", "Marta", "Pedro", "Ana", "Luis", "Carmen", "Iñaki", "Rosa", "David", "Sara", "Jorge", "Elena", "Miguel", "Lucía", "Raúl", "Nerea", "Pablo", "Irene", "Óscar", "Beatriz", "Hugo", "Clara", "Andrés", "Silvia", "Mikel", "Paula", "Sergio"], APE = ["Gómez", "Ruiz", "Sánchez", "Alonso", "Fernández", "Martín", "Díaz", "Etxeberria", "Pérez", "Torres", "López", "Herrera", "Castro", "Ortega", "Vidal", "Moreno", "Gil", "Sanz", "Calvo", "Ramos", "Lozano", "Navarro", "Rubio", "Arana"];
+  const C = ["Seat León", "VW Golf", "Renault Clio", "Peugeot 308", "Toyota Corolla", "Ford Focus", "Citroën C4", "Kia Ceed", "Dacia Sandero", "Opel Corsa", "Hyundai Tucson", "Ford Transit"], L = "BCDFGHJKLMNPRSTVWXYZ";
+  const out = [];
+  for (let i = 0; i < 190; i++) out.push({ cliente: i % 23 === 7 ? ["Transportes Cantábrico S.L.", "Reformas Laredo S.L.", "Panadería Ojeda"][i % 3] : NOM[Math.floor(r() * NOM.length)] + " " + APE[Math.floor(r() * APE.length)], vehiculo: C[Math.floor(r() * C.length)], matricula: String(1000 + Math.floor(r() * 8999)) + L[Math.floor(r() * 20)] + L[Math.floor(r() * 20)] + L[Math.floor(r() * 20)], telefono: "6" + String(10000000 + Math.floor(r() * 89999999)) });
+  return out;
+}
 function azarFijo(semilla) { let h = 2166136261; for (const c of String(semilla)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return () => { h ^= h << 13; h ^= h >>> 17; h ^= h << 5; return ((h >>> 0) % 1e6) / 1e6; }; }
 
 async function sembrar(env) {
@@ -115,8 +141,7 @@ async function sembrar(env) {
   await env.DB.prepare("INSERT OR IGNORE INTO ajustes (k, v) VALUES ('f_razon','Motor Norte S.L. (ficticio)'),('f_nif','B12345678'),('f_dir','C/ Herreros, nave 14 · Polígono Las Eras'),('f_cp','39700 Castro Urdiales (Cantabria)'),('f_tel','628 22 47 19'),('f_email','info@agencia-js.com'),('f_gestoria','gestoria@ejemplo.es')").run();
   const fac = await env.DB.prepare("SELECT COUNT(*) n FROM facturas").first();
   if (!fac.n) {
-    const rnd = azarFijo("tmn-facturas"), CL = ["Laura Gómez", "Javier Ruiz", "Marta Sánchez", "Pedro Alonso", "Ana Fernández", "Luis Martín", "Carmen Díaz", "Iñaki Etxeberria", "Rosa Pérez", "David Torres", "Sara López", "Jorge Herrera", "Elena Castro", "Miguel Ortega", "Lucía Vidal", "Transportes Cantábrico S.L.", "Raúl Moreno", "Nerea Gil"];
-    const COCHE = ["Seat León", "VW Golf", "Renault Clio", "Peugeot 308", "Toyota Corolla", "Ford Focus", "Citroën C4", "Kia Ceed", "Dacia Sandero", "Opel Corsa", "Hyundai Tucson", "Ford Transit"];
+    const rnd = azarFijo("tmn-facturas"), F = flota();
     const TRAB = [["Cambio de aceite y filtros", "mant", 69, 130], ["Kit de distribución", "mant", 290, 620], ["Pastillas y discos de freno", "seg", 89, 340], ["Neumáticos (montaje y equilibrado)", "seg", 76, 420], ["Batería nueva", "elec", 95, 190], ["Revisión pre-ITV", "seg", 39, 70], ["Diagnosis electrónica", "elec", 35, 60], ["Recarga de aire acondicionado", "elec", 59, 95], ["Embrague", "mant", 480, 890], ["Amortiguadores", "seg", 220, 460]];
     const MES = [0.85, 0.9, 1.0, 1.05, 1.1, 1.2, 1.25, 0.7, 1.15, 1.05, 1.0, 1.2]; // agosto flojo, verano y diciembre fuertes
     const DIA = [1.25, 1.05, 1.0, 1.0, 1.15, 0.6, 0];
@@ -126,16 +151,16 @@ async function sembrar(env) {
       const base = 3.1 * MES[+f.slice(5, 7) - 1] * DIA[d];
       let n = Math.floor(base + rnd() * 1.6 - 0.4); if (f === hoy) n = Math.min(n, 2);
       for (let k = 0; k < n; k++) {
-        const t = TRAB[Math.floor(rnd() * rnd() * TRAB.length)], total = r2(t[2] + rnd() * (t[3] - t[2])), anio = +f.slice(0, 4);
+        const t = TRAB[Math.floor(rnd() * rnd() * TRAB.length)], total = r2(t[2] + rnd() * (t[3] - t[2])), anio = +f.slice(0, 4), c = F[Math.floor(rnd() * F.length)];
         num[anio] = (num[anio] || 0) + 1;
         const base_ = r2(total / 1.21), h = hh(510 + Math.floor(rnd() * 9) * 60 + (d === 5 ? 30 : 0) + Math.floor(rnd() * 50));
-        filas.push([anio, num[anio], f, h, CL[Math.floor(rnd() * CL.length)], COCHE[Math.floor(rnd() * COCHE.length)] + " · " + String(1000 + Math.floor(rnd() * 8999)) + " " + ["KLM", "MNP", "LBC", "JRT", "HGF"][Math.floor(rnd() * 5)], JSON.stringify([{ c: t[0], i: total }]), base_, r2(total - base_), total, ["tarjeta", "tarjeta", "efectivo", "bizum", "transferencia"][Math.floor(rnd() * 5)], t[1]]);
+        filas.push(["F", anio, num[anio], f, h, c.cliente, c.telefono, c.vehiculo + " · " + conEspacio(c.matricula), c.matricula, JSON.stringify([{ c: t[0], i: total }]), base_, r2(total - base_), total, ["tarjeta", "tarjeta", "efectivo", "bizum", "transferencia"][Math.floor(rnd() * 5)], t[1]]);
       }
     }
     // pocas sentencias con muchas filas (datos propios de ejemplo, sin parámetros): así la primera visita gasta muy poca CPU
     const lit = (v) => typeof v === "number" ? String(v) : "'" + String(v).replace(/'/g, "''") + "'";
     const sentencias = [];
-    for (let i = 0; i < filas.length; i += 150) sentencias.push(env.DB.prepare("INSERT OR IGNORE INTO facturas (anio, numero, fecha, hora, cliente, vehiculo, lineas, base, iva, total, metodo, servicio, pct) VALUES " + filas.slice(i, i + 150).map((x) => "(" + x.map(lit).join(",") + ",21)").join(",")));
+    for (let i = 0; i < filas.length; i += 150) sentencias.push(env.DB.prepare("INSERT OR IGNORE INTO facturas (serie, anio, numero, fecha, hora, cliente, telefono, vehiculo, matricula, lineas, base, iva, total, metodo, servicio, pct) VALUES " + filas.slice(i, i + 150).map((x) => "(" + x.map(lit).join(",") + ",21)").join(",")));
     await env.DB.batch(sentencias);
   }
   const rep = await env.DB.prepare("SELECT COUNT(*) n FROM reparaciones").first();
@@ -147,6 +172,16 @@ async function sembrar(env) {
       env.DB.prepare("INSERT INTO reparaciones (matricula, vehiculo, cliente, tel4, mecanico, paso, nota, entrega, presupuesto, aprobado, foto, historial, actualizada) VALUES ('5678MNP','Peugeot 308','Cliente de ejemplo','1111','Marta',3,'Cambiando el kit de distribución.','mañana 13:00',?,1,'img/distribucion', ?, datetime('now'))").bind(JSON.stringify([{ c: "Kit de distribución con bomba de agua", i: 389 }, { c: "Mano de obra (3,5 h)", i: 158 }]), hist(3)),
       env.DB.prepare("INSERT INTO reparaciones (matricula, vehiculo, cliente, tel4, mecanico, paso, nota, entrega, presupuesto, aprobado, foto, historial, actualizada) VALUES ('9012LBC','Renault Clio','Cliente de ejemplo','2222','Javi',4,'¡Listo! Lavado de cortesía incluido.','ya está listo',?,1,'img/aceite', ?, datetime('now'))").bind(JSON.stringify([{ c: "Cambio de aceite y filtros", i: 89 }]), hist(4)),
     ]);
+  }
+  const ve = await env.DB.prepare("SELECT COUNT(*) n FROM vehiculos").first();
+  if (!ve.n) {
+    const F = flota(), rv = azarFijo("tmn-itv"), lit = (v) => v == null ? "NULL" : typeof v === "number" ? String(v) : "'" + String(v).replace(/'/g, "''") + "'";
+    await env.DB.prepare("INSERT OR IGNORE INTO vehiculos (matricula, vehiculo, cliente, telefono, itv, km) VALUES " + F.map((c, i) => "(" + [c.matricula, c.vehiculo, c.cliente, c.telefono, sumaDias(hoy, i < 6 ? 3 + i * 4 : Math.floor(rv() * 360) - 30), 40000 + Math.floor(rv() * 160000)].map(lit).join(",") + ")").join(",")).run();
+    const H = [], MEC = ["Javi", "Marta", "Dani"], TR = ["Cambio de aceite", "Frenos delanteros", "Distribución", "Diagnosis", "Neumáticos", "Embrague", "Aire acondicionado"];
+    for (let k = 0; k < 70; k++) { let f = sumaDias(hoy, -Math.floor(rv() * 45)); if (diaSemana(f) === 6) f = sumaDias(f, -1); const c = F[Math.floor(rv() * F.length)]; H.push("(" + [f, MEC[Math.floor(rv() * 3)], c.matricula, Math.round((0.5 + rv() * 4) * 2) / 2, TR[Math.floor(rv() * TR.length)]].map(lit).join(",") + ")"); }
+    await env.DB.prepare("INSERT INTO horas (fecha, mecanico, matricula, horas, trabajo) VALUES " + H.join(",")).run();
+    const anio = +hoy.slice(0, 4), P = [[F[2], [{ c: "Kit de distribución con bomba de agua", i: 389 }, { c: "Mano de obra (3,5 h)", i: 158 }], "abierto", -2], [F[5], [{ c: "Amortiguadores traseros (par)", i: 210 }, { c: "Alineado", i: 45 }], "aceptado", -6], [F[9], [{ c: "Embrague completo", i: 620 }, { c: "Mano de obra (5 h)", i: 225 }], "abierto", -1], [F[12], [{ c: "Neumáticos 205/55 R16 (4 uds.)", i: 296 }], "rechazado", -20]];
+    await env.DB.prepare("INSERT OR IGNORE INTO presupuestos (anio, numero, fecha, cliente, telefono, vehiculo, matricula, lineas, total, estado) VALUES " + P.map((x, i) => "(" + [anio, i + 1, sumaDias(hoy, x[3]), x[0].cliente, x[0].telefono, x[0].vehiculo + " · " + conEspacio(x[0].matricula), x[0].matricula, JSON.stringify(x[1]), r2(x[1].reduce((a, l) => a + l.i, 0)), x[2]].map(lit).join(",") + ")").join(",")).run();
   }
   const ci = await env.DB.prepare("SELECT COUNT(*) n FROM citas").first();
   if (!ci.n) {
@@ -320,19 +355,22 @@ async function admin(request, env, url, ruta, m) {
   /* --- reparaciones (sigue tu reparación) --- */
   if (ruta === "reparaciones" && m === "GET") {
     const { results } = await env.DB.prepare("SELECT * FROM reparaciones WHERE activa = 1 OR actualizada > datetime('now','-30 days') ORDER BY activa DESC, actualizada DESC LIMIT 200").all();
-    return json({ reparaciones: (results || []).map((r) => ({ ...repPublica(r), id: r.id, cliente: r.cliente, tel4: r.tel4, activa: r.activa, matricula_raw: r.matricula })) });
+    const em = await emisor(env);
+    return json({ resenas: em.resenas, reparaciones: (results || []).map((r) => ({ ...repPublica(r), id: r.id, cliente: r.cliente, tel4: r.tel4, telefono: r.telefono || "", activa: r.activa, matricula_raw: r.matricula })) });
   }
   if (ruta === "reparaciones/guardar" && m === "POST") {
     const b = await cuerpo(request), id = +b.id || 0, mt = matricula(b.matricula);
     if (!mt) return json({ error: "Escribe una matrícula válida (1234 KLM)." }, 400);
     const lineas = (Array.isArray(b.presupuesto) ? b.presupuesto : []).map((x) => ({ c: limpiar(x.c, 80), i: r2(Math.min(Math.max(+x.i || 0, 0), 99999)) })).filter((x) => x.c).slice(0, 20);
-    const foto = imagenOk(b.foto), t4 = String(b.tel4 || "").replace(/\D/g, "").slice(-4);
+    const tel = limpiar(b.telefono, 20); if (tel && !telOk(tel)) return json({ error: "El teléfono del cliente no parece correcto." }, 400);
+    const foto = imagenOk(b.foto), t4 = String(tel || b.tel4 || "").replace(/\D/g, "").slice(-4);
     if (t4 && t4.length !== 4) return json({ error: "Pon las 4 últimas cifras del teléfono del cliente." }, 400);
     const otra = await env.DB.prepare("SELECT id FROM reparaciones WHERE matricula = ? AND activa = 1 AND id != ?").bind(mt, id).first();
     if (otra) return json({ error: "Ya hay una reparación abierta con esa matrícula." }, 409);
     const v = [mt, limpiar(b.vehiculo, 60), limpiar(b.cliente, 60), t4, limpiar(b.mecanico, 30), texto(b.nota, 300), limpiar(b.entrega, 40), JSON.stringify(lineas), foto || null];
-    if (id) await env.DB.prepare("UPDATE reparaciones SET matricula=?, vehiculo=?, cliente=?, tel4=?, mecanico=?, nota=?, entrega=?, presupuesto=?, foto=?, actualizada=datetime('now') WHERE id=?").bind(...v, id).run();
-    else { const { fecha, hora } = ahoraLocal(); await env.DB.prepare("INSERT INTO reparaciones (matricula, vehiculo, cliente, tel4, mecanico, nota, entrega, presupuesto, foto, paso, historial, actualizada) VALUES (?,?,?,?,?,?,?,?,?,0,?,datetime('now'))").bind(...v, JSON.stringify([{ p: 0, t: fecha + " " + hora }])).run(); }
+    if (id) await env.DB.prepare("UPDATE reparaciones SET matricula=?, vehiculo=?, cliente=?, tel4=?, mecanico=?, nota=?, entrega=?, presupuesto=?, foto=?, telefono=?, actualizada=datetime('now') WHERE id=?").bind(...v, tel || null, id).run();
+    else { const { fecha, hora } = ahoraLocal(); await env.DB.prepare("INSERT INTO reparaciones (matricula, vehiculo, cliente, tel4, mecanico, nota, entrega, presupuesto, foto, telefono, paso, historial, actualizada) VALUES (?,?,?,?,?,?,?,?,?,?,0,?,datetime('now'))").bind(...v, tel || null, JSON.stringify([{ p: 0, t: fecha + " " + hora }])).run(); }
+    await recordarVehiculo(env, mt, limpiar(b.vehiculo, 60), limpiar(b.cliente, 60), tel);
     return json({ ok: true });
   }
   if (ruta === "reparaciones/paso" && m === "POST") {
@@ -353,35 +391,157 @@ async function admin(request, env, url, ruta, m) {
     const { fecha: hoy } = ahoraLocal();
     const desde = fechaOk(url.searchParams.get("desde")) ? url.searchParams.get("desde") : hoy.slice(0, 7) + "-01";
     const hasta = fechaOk(url.searchParams.get("hasta")) ? url.searchParams.get("hasta") : hoy;
-    const q = limpiar(url.searchParams.get("q"), 40);
-    const { results } = await env.DB.prepare("SELECT * FROM facturas WHERE fecha BETWEEN ?1 AND ?2 " + (q ? "AND (cliente LIKE ?3 OR vehiculo LIKE ?3) " : "") + "ORDER BY fecha DESC, numero DESC LIMIT 1000").bind(...(q ? [desde, hasta, "%" + q + "%"] : [desde, hasta])).all();
-    const fs = (results || []).map((f) => { let l = []; try { l = JSON.parse(f.lineas || "[]"); } catch {} return { ...f, lineas: l, codigo: f.anio + "-" + String(f.numero).padStart(4, "0") }; });
+    const q = limpiar(url.searchParams.get("q"), 40), qm = q.toUpperCase().replace(/[^0-9A-Z]/g, "");
+    const { results } = await env.DB.prepare("SELECT * FROM facturas WHERE fecha BETWEEN ?1 AND ?2 " + (q ? "AND (cliente LIKE ?3 OR vehiculo LIKE ?3 OR (?4 != '' AND matricula LIKE ?4)) " : "") + "ORDER BY fecha DESC, serie DESC, numero DESC LIMIT 1000").bind(...(q ? [desde, hasta, "%" + q + "%", qm ? "%" + qm + "%" : ""] : [desde, hasta])).all();
+    const fs = (results || []).map(facturaJ);
     const ok = fs.filter((f) => !f.anulada);
-    return json({ facturas: fs, desde, hasta, totales: { n: ok.length, base: r2(ok.reduce((a, f) => a + f.base, 0)), iva: r2(ok.reduce((a, f) => a + f.iva, 0)), total: r2(ok.reduce((a, f) => a + f.total, 0)) }, emisor: await emisor(env) });
+    return json({ facturas: fs, desde, hasta, totales: { n: ok.filter((f) => f.serie !== "R").length, rect: ok.filter((f) => f.serie === "R").length, base: r2(ok.reduce((a, f) => a + f.base, 0)), iva: r2(ok.reduce((a, f) => a + f.iva, 0)), total: r2(ok.reduce((a, f) => a + f.total, 0)) }, emisor: await emisor(env) });
   }
-  if (ruta === "facturas/nueva" && m === "POST") {
-    const b = await cuerpo(request), em = await emisor(env);
-    if (!em.razon || !em.nif) return json({ error: "Antes rellena tus datos fiscales en «Mis datos» (nombre o razón social y NIF/CIF)." }, 400);
-    const cliente = limpiar(b.cliente, 80); if (cliente.length < 2) return json({ error: "Escribe el nombre del cliente." }, 400);
+  if (ruta === "facturas/nueva" && m === "POST") { const r = await crearFactura(env, await cuerpo(request)); return r.error ? json(r, r.st || 400) : json(r); }
+  if (ruta === "facturas/rectificar" && m === "POST") {
+    const b = await cuerpo(request), o = await env.DB.prepare("SELECT * FROM facturas WHERE id = ?").bind(+b.id || 0).first();
+    if (!o || o.serie !== "F") return json({ error: "Solo se puede rectificar una factura ordinaria." }, 400);
+    if (o.rectificada) return json({ error: "Esta factura ya tiene una rectificativa." }, 409);
+    const motivo = texto(b.motivo, 200); if (motivo.length < 4) return json({ error: "Explica brevemente el motivo de la rectificación." }, 400);
+    const orig = JSON.parse(o.lineas || "[]");
+    const lineas = (Array.isArray(b.lineas) && b.lineas.length ? b.lineas : orig).map((x) => ({ c: limpiar(x.c, 120), i: r2(Math.abs(+String(x.i).replace(",", "."))) })).filter((x) => x.c && x.i > 0);
+    const maxT = orig.reduce((a, x) => a + (+x.i || 0), 0);
+    if (!lineas.length) return json({ error: "Indica qué importe se rectifica." }, 400);
+    if (lineas.reduce((a, x) => a + x.i, 0) > maxT + 0.01) return json({ error: "No puedes rectificar más que el total de la factura original." }, 400);
+    const r = await crearFactura(env, { serie: "R", cliente: o.cliente, cliente_nif: o.cliente_nif, cliente_dir: o.cliente_dir, telefono: o.telefono, vehiculo: o.vehiculo, lineas: lineas.map((x) => ({ c: x.c, i: -x.i })), pct: o.pct, iva_incluido: true, metodo: o.metodo, cat: o.servicio, rectifica: o.id, motivo });
+    if (r.error) return json(r, r.st || 400);
+    await env.DB.prepare("UPDATE facturas SET rectificada = ? WHERE id = ?").bind(r.factura.id, o.id).run();
+    return json(r);
+  }
+  if (ruta === "facturas/anular" && m === "POST") return json({ error: "Una factura emitida no se borra ni se anula: emite una factura rectificativa." }, 400);
+
+  /* --- clientes y vehículos --- */
+  if (ruta === "clientes" && m === "GET") {
+    const q = limpiar(url.searchParams.get("q"), 40).toLowerCase(), qm = q.toUpperCase().replace(/[^0-9A-Z]/g, "");
+    const [veh, fac] = await Promise.all([
+      env.DB.prepare("SELECT * FROM vehiculos").all(),
+      env.DB.prepare("SELECT matricula, cliente, telefono, vehiculo, COUNT(*) n, SUM(total) total, MAX(fecha) ultima FROM facturas WHERE anulada = 0 AND matricula IS NOT NULL AND matricula != '' GROUP BY matricula").all(),
+    ]);
+    const map = {};
+    for (const f of fac.results || []) map[f.matricula] = { matricula: f.matricula, cliente: f.cliente, telefono: f.telefono, vehiculo: (f.vehiculo || "").split(" · ")[0], visitas: f.n, gastado: r2(f.total), ultima: f.ultima, itv: null };
+    for (const v of veh.results || []) map[v.matricula] = { ...(map[v.matricula] || { visitas: 0, gastado: 0, ultima: null }), matricula: v.matricula, cliente: v.cliente || (map[v.matricula] || {}).cliente, telefono: v.telefono || (map[v.matricula] || {}).telefono, vehiculo: v.vehiculo || (map[v.matricula] || {}).vehiculo, itv: v.itv, km: v.km };
+    let l = Object.values(map);
+    if (q) l = l.filter((x) => (x.cliente || "").toLowerCase().includes(q) || (qm && x.matricula.includes(qm)) || (x.vehiculo || "").toLowerCase().includes(q) || (x.telefono || "").replace(/\D/g, "").includes(q.replace(/\D/g, "") || "x"));
+    l.sort((a, b) => (b.ultima || "").localeCompare(a.ultima || ""));
+    return json({ clientes: l.slice(0, 200).map((x) => ({ ...x, matricula_txt: conEspacio(x.matricula) })), total: l.length });
+  }
+  if (ruta === "ficha" && m === "GET") {
+    const mt = matricula(url.searchParams.get("m")); if (!mt) return json({ error: "Matrícula no válida." }, 400);
+    const pat = "%" + conEspacio(mt) + "%";
+    const [v, f, c, r, p, h] = await Promise.all([
+      env.DB.prepare("SELECT * FROM vehiculos WHERE matricula = ?").bind(mt).first(),
+      env.DB.prepare("SELECT * FROM facturas WHERE matricula = ? ORDER BY fecha DESC, id DESC LIMIT 100").bind(mt).all(),
+      env.DB.prepare("SELECT * FROM citas WHERE REPLACE(UPPER(vehiculo),' ','') LIKE ? ORDER BY fecha DESC LIMIT 50").bind("%" + mt + "%").all(),
+      env.DB.prepare("SELECT id, paso, vehiculo, actualizada, activa FROM reparaciones WHERE matricula = ? ORDER BY id DESC LIMIT 20").bind(mt).all(),
+      env.DB.prepare("SELECT * FROM presupuestos WHERE matricula = ? ORDER BY id DESC LIMIT 20").bind(mt).all(),
+      env.DB.prepare("SELECT * FROM horas WHERE matricula = ? ORDER BY fecha DESC LIMIT 50").bind(mt).all(),
+    ]);
+    const facs = (f.results || []).map(facturaJ), primera = facs[0] || {};
+    return json({ matricula: mt, matricula_txt: conEspacio(mt), vehiculo: v || { matricula: mt, vehiculo: (primera.vehiculo || "").split(" · ")[0], cliente: primera.cliente || "", telefono: primera.telefono || "" }, facturas: facs, citas: c.results || [], reparaciones: (r.results || []).map((x) => ({ ...x, paso_txt: PASOS[x.paso] })), presupuestos: (p.results || []).map(presupuestoJ), horas: h.results || [], gastado: r2(facs.filter((x) => !x.anulada).reduce((a, x) => a + x.total, 0)), pat });
+  }
+  if (ruta === "vehiculos/guardar" && m === "POST") {
+    const b = await cuerpo(request), mt = matricula(b.matricula); if (!mt) return json({ error: "Matrícula no válida." }, 400);
+    const tel = limpiar(b.telefono, 20); if (tel && !telOk(tel)) return json({ error: "El teléfono no parece correcto." }, 400);
+    const itv = b.itv && fechaOk(b.itv) ? b.itv : null, km = parseInt(b.km, 10);
+    await env.DB.prepare("INSERT INTO vehiculos (matricula, vehiculo, cliente, telefono, itv, km, notas) VALUES (?,?,?,?,?,?,?) ON CONFLICT(matricula) DO UPDATE SET vehiculo=excluded.vehiculo, cliente=excluded.cliente, telefono=excluded.telefono, itv=excluded.itv, km=excluded.km, notas=excluded.notas")
+      .bind(mt, limpiar(b.vehiculo, 60), limpiar(b.cliente, 80), tel || null, itv, km >= 0 && km < 2e6 ? km : null, texto(b.notas, 400)).run();
+    return json({ ok: true });
+  }
+  if (ruta === "recordatorios" && m === "GET") {
+    const { fecha: hoy } = ahoraLocal(), em = await emisor(env);
+    const itv = (await env.DB.prepare("SELECT * FROM vehiculos WHERE itv IS NOT NULL AND itv BETWEEN ? AND ? AND telefono IS NOT NULL AND (aviso_itv IS NULL OR aviso_itv < date(itv, '-60 days')) ORDER BY itv").bind(sumaDias(hoy, -30), sumaDias(hoy, 30)).all()).results || [];
+    const rev = (await env.DB.prepare("SELECT f.matricula, MAX(f.fecha) ultima, v.cliente, v.telefono, v.vehiculo, v.aviso_rev FROM facturas f JOIN vehiculos v ON v.matricula = f.matricula WHERE f.anulada = 0 AND f.serie = 'F' GROUP BY f.matricula HAVING ultima <= ? AND v.telefono IS NOT NULL AND (v.aviso_rev IS NULL OR v.aviso_rev < ultima) ORDER BY ultima LIMIT 30").bind(sumaDias(hoy, -330)).all()).results || [];
+    return json({ itv: itv.map((v) => ({ ...v, matricula_txt: conEspacio(v.matricula), dias: Math.round((Date.parse(v.itv) - Date.parse(hoy)) / 864e5) })), revision: rev.map((v) => ({ ...v, matricula_txt: conEspacio(v.matricula) })), taller: em.razon || "Taller Motor Norte", tel: em.tel });
+  }
+  if (ruta === "recordatorios/hecho" && m === "POST") {
+    const b = await cuerpo(request), mt = matricula(b.matricula); if (!mt) return json({ error: "Matrícula no válida." }, 400);
+    await env.DB.prepare("UPDATE vehiculos SET " + (b.tipo === "itv" ? "aviso_itv" : "aviso_rev") + " = ? WHERE matricula = ?").bind(ahoraLocal().fecha, mt).run();
+    return json({ ok: true });
+  }
+
+  /* --- presupuestos --- */
+  if (ruta === "presupuestos" && m === "GET") {
+    const { results } = await env.DB.prepare("SELECT * FROM presupuestos ORDER BY CASE estado WHEN 'abierto' THEN 0 WHEN 'aceptado' THEN 1 ELSE 2 END, id DESC LIMIT 200").all();
+    return json({ presupuestos: (results || []).map(presupuestoJ), emisor: await emisor(env) });
+  }
+  if (ruta === "presupuestos/guardar" && m === "POST") {
+    const b = await cuerpo(request), id = +b.id || 0, cliente = limpiar(b.cliente, 80);
+    if (cliente.length < 2) return json({ error: "Escribe el nombre del cliente." }, 400);
+    const tel = limpiar(b.telefono, 20); if (tel && !telOk(tel)) return json({ error: "El teléfono no parece correcto." }, 400);
     const lineas = (Array.isArray(b.lineas) ? b.lineas : []).map((x) => ({ c: limpiar(x.c, 120), i: r2(+String(x.i).replace(",", ".")) })).filter((x) => x.c && x.i > 0 && x.i < 1e6).slice(0, 25);
-    if (!lineas.length) return json({ error: "Añade lo que se le ha hecho y su precio." }, 400);
-    const pct = [0, 4, 10, 21].includes(+b.pct) ? +b.pct : +em.iva || 21, incl = b.iva_incluido !== false;
-    let total, base;
-    if (incl) { total = r2(lineas.reduce((a, x) => a + x.i, 0)); base = r2(total / (1 + pct / 100)); }
-    else { base = r2(lineas.reduce((a, x) => a + x.i, 0)); total = r2(base * (1 + pct / 100)); }
-    const nif = limpiar(b.cliente_nif, 20).toUpperCase(), { fecha, hora } = ahoraLocal(), anio = +fecha.slice(0, 4);
-    const metodo = METODOS[b.metodo] ? b.metodo : "tarjeta";
-    for (let intento = 0; intento < 4; intento++) {
-      const ult = await env.DB.prepare("SELECT COALESCE(MAX(numero),0) n FROM facturas WHERE anio = ?").bind(anio).first();
-      try {
-        const r = await env.DB.prepare("INSERT INTO facturas (anio, numero, fecha, hora, cliente, cliente_nif, cliente_dir, vehiculo, lineas, base, iva, total, pct, metodo, servicio) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)").bind(anio, ult.n + 1, fecha, hora, cliente, nif || null, limpiar(b.cliente_dir, 140) || null, limpiar(b.vehiculo, 80) || null, JSON.stringify(lineas), base, r2(total - base), total, pct, metodo, CATS[b.cat] ? b.cat : null).run();
-        const f = await env.DB.prepare("SELECT * FROM facturas WHERE id = ?").bind(r.meta.last_row_id).first();
-        return json({ ok: true, factura: { ...f, lineas, codigo: anio + "-" + String(f.numero).padStart(4, "0") }, emisor: em });
-      } catch (e) { if (!/UNIQUE/i.test(String(e))) throw e; }
+    if (!lineas.length) return json({ error: "Añade al menos un trabajo con su precio." }, 400);
+    const veh = limpiar(b.vehiculo, 80), mt = matricula((veh.match(PLACA) || [""])[0]) || matricula(b.matricula) || null, total = r2(lineas.reduce((a, x) => a + x.i, 0)), val = Math.min(Math.max(parseInt(b.validez, 10) || 30, 1), 365);
+    if (id) {
+      const p = await env.DB.prepare("SELECT estado FROM presupuestos WHERE id = ?").bind(id).first();
+      if (!p) return json({ error: "No encontrado." }, 404); if (p.estado === "facturado") return json({ error: "Este presupuesto ya está facturado." }, 409);
+      await env.DB.prepare("UPDATE presupuestos SET cliente=?, telefono=?, vehiculo=?, matricula=?, lineas=?, total=?, validez=? WHERE id=?").bind(cliente, tel || null, veh || null, mt, JSON.stringify(lineas), total, val, id).run();
+    } else {
+      const { fecha } = ahoraLocal(), anio = +fecha.slice(0, 4);
+      for (let k = 0; k < 4; k++) { const u = await env.DB.prepare("SELECT COALESCE(MAX(numero),0) n FROM presupuestos WHERE anio = ?").bind(anio).first(); try { await env.DB.prepare("INSERT INTO presupuestos (anio, numero, fecha, cliente, telefono, vehiculo, matricula, lineas, total, validez) VALUES (?,?,?,?,?,?,?,?,?,?)").bind(anio, u.n + 1, fecha, cliente, tel || null, veh || null, mt, JSON.stringify(lineas), total, val).run(); break; } catch (e) { if (!/UNIQUE/i.test(String(e)) || k === 3) throw e; } }
     }
-    return json({ error: "No se pudo numerar la factura. Inténtalo de nuevo." }, 409);
+    if (mt) await recordarVehiculo(env, mt, veh, cliente, tel);
+    return json({ ok: true });
   }
-  if (ruta === "facturas/anular" && m === "POST") { const b = await cuerpo(request); await env.DB.prepare("UPDATE facturas SET anulada = 1 WHERE id = ?").bind(+b.id || 0).run(); return json({ ok: true }); }
+  if (ruta === "presupuestos/estado" && m === "POST") {
+    const b = await cuerpo(request); if (!["abierto", "aceptado", "rechazado"].includes(b.estado)) return json({ error: "Estado no válido." }, 400);
+    await env.DB.prepare("UPDATE presupuestos SET estado = ? WHERE id = ? AND estado != 'facturado'").bind(b.estado, +b.id || 0).run(); return json({ ok: true });
+  }
+  if (ruta === "presupuestos/facturar" && m === "POST") {
+    const b = await cuerpo(request), p = await env.DB.prepare("SELECT * FROM presupuestos WHERE id = ?").bind(+b.id || 0).first();
+    if (!p) return json({ error: "No encontrado." }, 404); if (p.estado === "facturado") return json({ error: "Este presupuesto ya está facturado." }, 409);
+    const r = await crearFactura(env, { cliente: p.cliente, telefono: p.telefono, vehiculo: p.vehiculo, lineas: JSON.parse(p.lineas || "[]"), iva_incluido: true, metodo: b.metodo, cat: b.cat });
+    if (r.error) return json(r, r.st || 400);
+    await env.DB.prepare("UPDATE presupuestos SET estado = 'facturado', factura_id = ? WHERE id = ?").bind(r.factura.id, p.id).run();
+    return json(r);
+  }
+
+  /* --- horas por mecánico --- */
+  if (ruta === "horas" && m === "GET") {
+    const { fecha: hoy } = ahoraLocal(), desde = fechaOk(url.searchParams.get("desde")) ? url.searchParams.get("desde") : hoy.slice(0, 7) + "-01", hasta = fechaOk(url.searchParams.get("hasta")) ? url.searchParams.get("hasta") : hoy;
+    const [l, t, mec] = await Promise.all([
+      env.DB.prepare("SELECT * FROM horas WHERE fecha BETWEEN ? AND ? ORDER BY fecha DESC, id DESC LIMIT 500").bind(desde, hasta).all(),
+      env.DB.prepare("SELECT mecanico, SUM(horas) horas, COUNT(*) n, COUNT(DISTINCT matricula) coches FROM horas WHERE fecha BETWEEN ? AND ? GROUP BY mecanico ORDER BY horas DESC").bind(desde, hasta).all(),
+      env.DB.prepare("SELECT mecanico FROM horas UNION SELECT mecanico FROM reparaciones WHERE mecanico IS NOT NULL AND mecanico != ''").all(),
+    ]);
+    return json({ horas: (l.results || []).map((x) => ({ ...x, matricula_txt: x.matricula ? conEspacio(x.matricula) : "" })), totales: (t.results || []).map((x) => ({ ...x, horas: r2(x.horas) })), mecanicos: (mec.results || []).map((x) => x.mecanico).filter(Boolean), desde, hasta });
+  }
+  if (ruta === "horas/nueva" && m === "POST") {
+    const b = await cuerpo(request), mec = limpiar(b.mecanico, 30), h = +String(b.horas).replace(",", ".");
+    if (mec.length < 2) return json({ error: "Escribe el nombre del mecánico." }, 400);
+    if (!(h > 0 && h <= 16)) return json({ error: "Las horas deben estar entre 0,25 y 16." }, 400);
+    const f = fechaOk(b.fecha) ? b.fecha : ahoraLocal().fecha;
+    await env.DB.prepare("INSERT INTO horas (fecha, mecanico, matricula, horas, trabajo) VALUES (?,?,?,?,?)").bind(f, mec, matricula(b.matricula) || null, r2(h), limpiar(b.trabajo, 80)).run();
+    return json({ ok: true });
+  }
+  if (ruta === "horas/borrar" && m === "POST") { const b = await cuerpo(request); await env.DB.prepare("DELETE FROM horas WHERE id = ?").bind(+b.id || 0).run(); return json({ ok: true }); }
+
+  /* --- cierre de caja --- */
+  if (ruta === "caja" && m === "GET") {
+    const { fecha: hoy } = ahoraLocal(), f = fechaOk(url.searchParams.get("fecha")) ? url.searchParams.get("fecha") : hoy;
+    const [met, c, hist] = await Promise.all([
+      env.DB.prepare("SELECT metodo, COUNT(*) n, SUM(total) total FROM facturas WHERE anulada = 0 AND fecha = ? GROUP BY metodo").bind(f).all(),
+      env.DB.prepare("SELECT * FROM cierres WHERE fecha = ?").bind(f).first(),
+      env.DB.prepare("SELECT fecha, contado, diferencia, datos FROM cierres ORDER BY fecha DESC LIMIT 31").all(),
+    ]);
+    const por = Object.fromEntries(Object.keys(METODOS).map((k) => [k, { n: 0, total: 0 }]));
+    for (const x of met.results || []) por[x.metodo] = { n: x.n, total: r2(x.total) };
+    return json({ fecha: f, metodos: por, total: r2(Object.values(por).reduce((a, x) => a + x.total, 0)), n: Object.values(por).reduce((a, x) => a + x.n, 0), cierre: c ? { ...c, datos: JSON.parse(c.datos || "{}") } : null, historial: (hist.results || []).map((x) => ({ ...x, datos: JSON.parse(x.datos || "{}") })), nombres: METODOS });
+  }
+  if (ruta === "caja/cerrar" && m === "POST") {
+    const b = await cuerpo(request), f = fechaOk(b.fecha) ? b.fecha : ahoraLocal().fecha, contado = +String(b.contado).replace(",", ".");
+    if (!(contado >= 0 && contado < 1e6)) return json({ error: "Escribe el efectivo que has contado en la caja." }, 400);
+    const met = (await env.DB.prepare("SELECT metodo, COUNT(*) n, SUM(total) total FROM facturas WHERE anulada = 0 AND fecha = ? GROUP BY metodo").bind(f).all()).results || [];
+    const datos = Object.fromEntries(met.map((x) => [x.metodo, { n: x.n, total: r2(x.total) }])), ef = (datos.efectivo || { total: 0 }).total, inicial = r2(Math.max(+String(b.inicial || 0).replace(",", ".") || 0, 0));
+    datos.inicial = inicial; datos.total = r2(met.reduce((a, x) => a + x.total, 0));
+    const dif = r2(contado - inicial - ef);
+    await env.DB.prepare("INSERT INTO cierres (fecha, datos, contado, diferencia, notas) VALUES (?,?,?,?,?) ON CONFLICT(fecha) DO UPDATE SET datos=excluded.datos, contado=excluded.contado, diferencia=excluded.diferencia, notas=excluded.notas, creado=datetime('now')").bind(f, JSON.stringify(datos), r2(contado), dif, texto(b.notas, 300)).run();
+    return json({ ok: true, diferencia: dif });
+  }
 
   /* --- servicios de la web --- */
   if (ruta === "servicios" && m === "GET") {
@@ -418,16 +578,53 @@ async function admin(request, env, url, ruta, m) {
       if (ge && !emailOk(ge)) return json({ error: "El correo de la gestoría no parece correcto." }, 400);
       if (nif && !/^[A-Z0-9]{8,10}$/.test(nif)) return json({ error: "El NIF/CIF no parece correcto." }, 400);
       const iva = [0, 4, 10, 21].includes(+b.iva) ? +b.iva : 21;
-      for (const [k, v] of [["f_razon", limpiar(b.razon, 80)], ["f_nif", nif], ["f_dir", limpiar(b.dir, 120)], ["f_cp", limpiar(b.cp, 80)], ["f_tel", limpiar(b.tel, 20)], ["f_email", em], ["f_gestoria", ge], ["iva", iva], ["f_pie", texto(b.pie, 300)]]) await ponAjuste(env, k, v);
+      if (b.resenas && !resenaOk(b.resenas)) return json({ error: "El enlace de reseñas de Google debe empezar por https://" }, 400);
+      for (const [k, v] of [["f_razon", limpiar(b.razon, 80)], ["f_nif", nif], ["f_dir", limpiar(b.dir, 120)], ["f_cp", limpiar(b.cp, 80)], ["f_tel", limpiar(b.tel, 20)], ["f_email", em], ["f_gestoria", ge], ["iva", iva], ["f_pie", texto(b.pie, 300)], ["f_resenas", resenaOk(b.resenas)]]) await ponAjuste(env, k, v);
       return json({ ok: true, datos: await emisor(env) });
     }
   }
   return json({ error: "No encontrado" }, 404);
 }
 
+const PLACA = /\b\d{4}\s?[BCDFGHJKLMNPRSTVWXYZ]{3}\b/i;
+const resenaOk = (u) => { u = limpiar(u, 300); return /^https:\/\/[^\s"'<>]+$/i.test(u) ? u : ""; };
+const codigoF = (f) => (f.serie === "R" ? "R" : "") + f.anio + "-" + String(f.numero).padStart(4, "0");
+function facturaJ(f) { let l = []; try { l = JSON.parse(f.lineas || "[]"); } catch {} return { ...f, lineas: l, codigo: codigoF(f) }; }
+function presupuestoJ(p) { let l = []; try { l = JSON.parse(p.lineas || "[]"); } catch {} return { ...p, lineas: l, codigo: "P" + p.anio + "-" + String(p.numero).padStart(3, "0"), caduca: sumaDias(p.fecha, p.validez || 30) }; }
+async function recordarVehiculo(env, mt, vehiculo, cliente, tel) { // la ficha del coche se completa sola con lo que se va registrando
+  if (!mt) return;
+  await env.DB.prepare("INSERT INTO vehiculos (matricula, vehiculo, cliente, telefono) VALUES (?,?,?,?) ON CONFLICT(matricula) DO UPDATE SET vehiculo=COALESCE(NULLIF(excluded.vehiculo,''), vehiculo), cliente=COALESCE(NULLIF(excluded.cliente,''), cliente), telefono=COALESCE(NULLIF(excluded.telefono,''), telefono)").bind(mt, vehiculo || "", cliente || "", tel || "").run();
+}
+async function crearFactura(env, b) {
+  const em = await emisor(env), serie = b.serie === "R" ? "R" : "F";
+  if (!em.razon || !em.nif) return { error: "Antes rellena tus datos fiscales en «Mis datos» (nombre o razón social y NIF/CIF)." };
+  const cliente = limpiar(b.cliente, 80); if (cliente.length < 2) return { error: "Escribe el nombre del cliente." };
+  const tel = limpiar(b.telefono, 20); if (tel && !telOk(tel)) return { error: "El teléfono del cliente no parece correcto." };
+  const lineas = (Array.isArray(b.lineas) ? b.lineas : []).map((x) => ({ c: limpiar(x.c, 120), i: r2(+String(x.i).replace(",", ".")) })).filter((x) => x.c && (serie === "R" ? x.i < 0 && x.i > -1e6 : x.i > 0 && x.i < 1e6)).slice(0, 25);
+  if (!lineas.length) return { error: "Añade lo que se le ha hecho y su precio." };
+  const pct = [0, 4, 10, 21].includes(+b.pct) ? +b.pct : +em.iva || 21, incl = b.iva_incluido !== false;
+  let total, base;
+  if (incl) { total = r2(lineas.reduce((a, x) => a + x.i, 0)); base = r2(total / (1 + pct / 100)); }
+  else { base = r2(lineas.reduce((a, x) => a + x.i, 0)); total = r2(base * (1 + pct / 100)); }
+  const veh = limpiar(b.vehiculo, 80), mt = matricula((veh.match(PLACA) || [""])[0]) || null;
+  const nif = limpiar(b.cliente_nif, 20).toUpperCase(), { fecha, hora } = ahoraLocal(), anio = +fecha.slice(0, 4), metodo = METODOS[b.metodo] ? b.metodo : "tarjeta";
+  for (let intento = 0; intento < 4; intento++) {
+    const ult = await env.DB.prepare("SELECT COALESCE(MAX(numero),0) n FROM facturas WHERE anio = ? AND serie = ?").bind(anio, serie).first();
+    try {
+      const r = await env.DB.prepare("INSERT INTO facturas (serie, anio, numero, fecha, hora, cliente, cliente_nif, cliente_dir, telefono, vehiculo, matricula, lineas, base, iva, total, pct, metodo, servicio, rectifica, motivo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(serie, anio, ult.n + 1, fecha, hora, cliente, nif || null, limpiar(b.cliente_dir, 140) || null, tel || null, veh || null, mt, JSON.stringify(lineas), base, r2(total - base), total, pct, metodo, CATS[b.cat] ? b.cat : null, b.rectifica || null, b.motivo || null).run();
+      const f = await env.DB.prepare("SELECT * FROM facturas WHERE id = ?").bind(r.meta.last_row_id).first();
+      if (mt && serie === "F") await recordarVehiculo(env, mt, veh.split(" · ")[0].replace(PLACA, "").trim(), cliente, tel);
+      let orig = null; if (f.rectifica) orig = await env.DB.prepare("SELECT serie, anio, numero, fecha FROM facturas WHERE id = ?").bind(f.rectifica).first();
+      return { ok: true, factura: { ...facturaJ(f), original: orig ? { codigo: codigoF(orig), fecha: orig.fecha } : null }, emisor: em };
+    } catch (e) { if (!/UNIQUE/i.test(String(e))) throw e; }
+  }
+  return { error: "No se pudo numerar la factura. Inténtalo de nuevo.", st: 409 };
+}
+
 async function emisor(env) {
   const a = await ajustes(env);
-  return { razon: a.f_razon || "", nif: a.f_nif || "", dir: a.f_dir || "", cp: a.f_cp || "", tel: a.f_tel || "", email: a.f_email || "", gestoria: a.f_gestoria || "", iva: +a.iva || 21, pie: a.f_pie || "Garantía legal de la reparación: 3 meses o 2.000 km. Garantía del taller: 12 meses en piezas y mano de obra." };
+  return { razon: a.f_razon || "", nif: a.f_nif || "", dir: a.f_dir || "", cp: a.f_cp || "", tel: a.f_tel || "", email: a.f_email || "", gestoria: a.f_gestoria || "", iva: +a.iva || 21, resenas: a.f_resenas || (env.ADMIN_HASH ? "" : "https://g.page/r/ejemplo-taller-motor-norte/review"), pie: a.f_pie || "Garantía legal de la reparación: 3 meses o 2.000 km. Garantía del taller: 12 meses en piezas y mano de obra." };
 }
 
 /* ------------------------------------------------------------------ resumen de ventas */
@@ -449,7 +646,7 @@ async function resumen(env, url) {
   // si el periodo está en curso, se compara con los mismos días del anterior (no con el periodo entero)
   const parcial = a <= hoy && hoy < b && periodo !== "dia";
   if (parcial) { const dias = Math.round((Date.parse(hoy) - Date.parse(a)) / 864e5); pb = sumaDias(pa, dias) < pb ? sumaDias(pa, dias) : pb; }
-  const tot = (x, y) => env.DB.prepare("SELECT COUNT(*) n, COALESCE(SUM(total),0) total, COALESCE(SUM(base),0) base FROM facturas WHERE anulada = 0 AND fecha BETWEEN ? AND ?").bind(x, y).first();
+  const tot = (x, y) => env.DB.prepare("SELECT COUNT(CASE WHEN serie = 'F' THEN 1 END) n, COALESCE(SUM(total),0) total, COALESCE(SUM(base),0) base FROM facturas WHERE anulada = 0 AND fecha BETWEEN ? AND ?").bind(x, y).first();
   const [act, ant, primera] = await Promise.all([tot(a, b), tot(pa, pb), env.DB.prepare("SELECT MIN(fecha) f FROM facturas WHERE anulada = 0").first()]);
   const comparable = !!(primera && primera.f && primera.f <= pa); // si no hay datos de todo el periodo anterior, no se compara
   const desde12 = sumaDias(hoy.slice(0, 7) + "-01", -340).slice(0, 7) + "-01";

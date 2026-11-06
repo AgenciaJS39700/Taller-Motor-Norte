@@ -107,7 +107,7 @@ td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 .fotos button[aria-pressed=true]{border-color:var(--brand)}.fotos img{width:100%;height:100%;object-fit:cover;display:block}
 .subir{position:relative;overflow:hidden}.subir input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
 /* diálogos */
-dialog{width:min(560px,calc(100vw - 20px));max-height:calc(100dvh - 20px);border:1px solid var(--line2);border-radius:20px;background:var(--card);color:var(--ink);padding:1.2rem 1.2rem 1rem}
+dialog{width:min(560px,calc(100vw - 20px));max-height:calc(100dvh - 20px);overflow-y:auto;overscroll-behavior:contain;border:1px solid var(--line2);border-radius:20px;background:var(--card);color:var(--ink);padding:1.2rem 1.2rem 1rem}
 dialog.big{width:min(760px,calc(100vw - 20px))}
 dialog::backdrop{background:rgba(0,0,0,.6)}
 dialog h2{font-size:1.2rem}
@@ -116,9 +116,16 @@ dialog h2{font-size:1.2rem}
 .lin input{min-height:44px;border-radius:10px;border:1px solid var(--line2);background:var(--bg);padding:.5rem .7rem;min-width:0}
 .lin button{border:1px solid var(--line2);background:transparent;border-radius:10px;cursor:pointer}
 .tot{margin-top:.8rem;padding:.7rem .9rem;border-radius:12px;background:var(--bg2);display:grid;gap:.15rem;font-variant-numeric:tabular-nums}
-.tot div{display:flex;justify-content:space-between;gap:1rem}.tot .g{font-weight:800;font-size:1.1rem}
+.tot div{display:flex;flex-wrap:wrap;justify-content:space-between;gap:0 1rem}.tot .g{font-weight:800;font-size:1.1rem}
 .acc-d{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:.5rem;margin-top:1rem}
 .toast{pointer-events:none;position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);z-index:100;background:var(--ink);color:var(--bg);padding:.7rem 1.1rem;border-radius:12px;font-weight:700;max-width:calc(100vw - 24px);box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}#cjK{grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))}.busca{min-height:40px;border-radius:999px;border:1px solid var(--line2);background:var(--bg);padding:0 .9rem;min-width:0;width:min(280px,100%)}
+.cli{overflow:hidden}.ver .fac table{table-layout:fixed}.fac td,.fac th{overflow-wrap:anywhere}.cli h3{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center;margin:0 0 .3rem}
+.cli .row{margin-top:.6rem}
+.rec{display:grid;gap:.5rem}.rec>div{display:flex;flex-wrap:wrap;gap:.4rem .8rem;align-items:center;justify-content:space-between;padding:.55rem 0;border-top:1px solid var(--line)}
+.rec>div:first-child{border-top:0}
+.hist h3{font-size:.95rem;margin:1rem 0 .3rem}
+.hist .it{display:flex;flex-wrap:wrap;gap:.2rem .8rem;justify-content:space-between;align-items:center;padding:.45rem 0;border-top:1px solid var(--line);font-size:.9rem}
 .mes{margin-top:1.1rem}.mes>h3{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.2rem 1rem;font-size:1rem;margin-bottom:.3rem}.mes>h3 span:first-child{text-transform:capitalize}.mes>h3 span:last-child{color:var(--mute);font-size:.88rem;font-weight:600}
 /* factura (pantalla e impresión) */
 #imp{display:none}
@@ -138,7 +145,7 @@ dialog h2{font-size:1.2rem}
   .bar{grid-template-columns:52px 1fr;font-size:.74rem}.bar b{grid-column:1/-1;justify-self:end;margin-top:-.3rem}
   .cols-v{height:120px}.cols-v em{display:none}.kpi b{font-size:1.2rem}
   .login form{padding:16px}#fMes,#fQ{width:100%!important;min-width:0}#s-facs .row{width:100%}.lin{grid-template-columns:1fr 70px 36px}
-  dialog{padding:.8rem;border-radius:12px}.btn{padding:0 .7rem;font-size:.82rem}
+  dialog{padding:.8rem;border-radius:12px}.acc-d{flex-direction:column-reverse;align-items:stretch}.acc-d .btn{width:100%;white-space:normal}.two{grid-template-columns:1fr!important}.btn{padding:0 .7rem;font-size:.82rem}
   .seg button{padding:0 .5rem;font-size:.75rem}.fac{padding:10px}
 }
 @media print{
@@ -169,7 +176,7 @@ dialog h2{font-size:1.2rem}
   <header class="top"><div class="wrap"><div class="brand"><i><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.2L4 16.8V20h3.2l5.3-5.3a4 4 0 0 0 5.2-5.4l-2.5 2.5-2.4-.6-.6-2.4z" fill="#1a0d02"/></svg></i><span>Taller Motor Norte</span></div>
     <div class="row"><a class="btn btn-s" href="./" target="_blank" rel="noopener">Ver la web</a><button class="btn btn-s" type="button" id="salir">Salir</button></div></div>
     <div class="wrap"><nav class="tabs" role="tablist" aria-label="Secciones del panel">
-      <button role="tab" type="button" data-t="resumen" aria-selected="true">📊 Resumen</button><button role="tab" type="button" data-t="citas" aria-selected="false">📅 Citas</button><button role="tab" type="button" data-t="reps" aria-selected="false">🔧 Reparaciones</button><button role="tab" type="button" data-t="facs" aria-selected="false">🧾 Facturas</button><button role="tab" type="button" data-t="servs" aria-selected="false">🛠️ Servicios</button><button role="tab" type="button" data-t="datos" aria-selected="false">👤 Mis datos</button>
+      <button role="tab" type="button" data-t="resumen" aria-selected="true">📊 Resumen</button><button role="tab" type="button" data-t="citas" aria-selected="false">📅 Citas</button><button role="tab" type="button" data-t="reps" aria-selected="false">🔧 Reparaciones</button><button role="tab" type="button" data-t="clis" aria-selected="false">👥 Clientes</button><button role="tab" type="button" data-t="pres" aria-selected="false">📝 Presupuestos</button><button role="tab" type="button" data-t="facs" aria-selected="false">🧾 Facturas</button><button role="tab" type="button" data-t="caja" aria-selected="false">💶 Caja</button><button role="tab" type="button" data-t="mecs" aria-selected="false">⏱️ Mecánicos</button><button role="tab" type="button" data-t="servs" aria-selected="false">🛠️ Servicios</button><button role="tab" type="button" data-t="datos" aria-selected="false">👤 Mis datos</button>
     </nav></div>
   </header>
   <main class="wrap">
@@ -216,6 +223,21 @@ dialog h2{font-size:1.2rem}
       <div class="card"><div class="tw"><table><thead><tr><th>Matrícula</th><th>Coche</th><th>Cliente</th><th>Entregado</th><th></th></tr></thead><tbody id="rpEnt"></tbody></table></div></div>
     </section>
 
+    <!-- CLIENTES -->
+    <section class="sec" id="s-clis" role="tabpanel" hidden>
+      <div class="head2"><div><h2>Clientes y vehículos</h2><p class="muted" style="margin:0" id="clP">La ficha de cada coche se completa sola con sus facturas, citas y reparaciones.</p></div>
+        <div class="row"><label class="sr" for="clQ">Buscar</label><input id="clQ" type="search" placeholder="Matrícula, nombre o teléfono" class="busca"></div></div>
+      <div class="card" id="clRec"></div>
+      <div class="svs" id="clLista" style="margin-top:12px"></div>
+    </section>
+
+    <!-- PRESUPUESTOS -->
+    <section class="sec" id="s-pres" role="tabpanel" hidden>
+      <div class="head2"><div><h2>Presupuestos</h2><p class="muted" style="margin:0">Cuando el cliente acepta, se convierte en factura con un toque.</p></div>
+        <div class="row"><button class="btn btn-p" type="button" id="prNuevo">+ Nuevo presupuesto</button></div></div>
+      <div class="svs" id="prLista"></div>
+    </section>
+
     <!-- FACTURAS -->
     <section class="sec" id="s-facs" role="tabpanel" hidden>
       <div class="head2"><div><h2>Facturas</h2><p class="muted" style="margin:0" id="fP"></p></div>
@@ -229,6 +251,34 @@ dialog h2{font-size:1.2rem}
         <div class="grid" id="fK" style="margin-top:1rem"></div>
         <div class="row" style="margin-top:1rem"><button class="btn btn-s" type="button" id="fGest">✉️ Enviar a mi gestoría</button><button class="btn btn-s" type="button" id="fCsv">⬇️ Descargar para Excel</button><button class="btn btn-s" type="button" id="fImpL">🖨️ Imprimir listado</button></div>
         <div id="fLista"></div>
+      </div>
+    </section>
+
+    <!-- CAJA -->
+    <section class="sec" id="s-caja" role="tabpanel" hidden>
+      <div class="head2"><div><h2>Cierre de caja</h2><p class="muted" style="margin:0" id="cjP"></p></div>
+        <div class="row"><label class="sr" for="cjF">Día</label><input id="cjF" type="date" class="busca" style="width:auto"></div></div>
+      <div class="grid" id="cjK"></div>
+      <div class="cols">
+        <form class="card" id="cjForm" novalidate><h3>Cuadrar el efectivo</h3>
+          <div class="two"><div class="f"><label for="cjI">Fondo de caja al abrir (€)</label><input id="cjI" inputmode="decimal" maxlength="9" placeholder="0,00"></div><div class="f"><label for="cjC">Efectivo contado al cerrar (€)</label><input id="cjC" inputmode="decimal" maxlength="9" placeholder="0,00"></div></div>
+          <div class="tot" id="cjT"></div>
+          <div class="f"><label for="cjN">Notas</label><input id="cjN" maxlength="300" placeholder="Por ejemplo: pago a proveedor en efectivo"></div>
+          <p class="err" id="cjE" role="alert"></p>
+          <div class="row"><button class="btn btn-p" type="submit">Cerrar caja</button><button class="btn" type="button" id="cjImp">🖨️ Imprimir cierre</button></div>
+          <p class="small muted" id="cjEst" style="margin:.6rem 0 0"></p>
+        </form>
+        <div class="card"><h3>Últimos cierres</h3><div class="tw"><table><thead><tr><th>Día</th><th class="n">Facturado</th><th class="n">Contado</th><th class="n">Diferencia</th></tr></thead><tbody id="cjH"></tbody></table></div></div>
+      </div>
+    </section>
+
+    <!-- MECÁNICOS -->
+    <section class="sec" id="s-mecs" role="tabpanel" hidden>
+      <div class="head2"><div><h2>Horas por mecánico</h2><p class="muted" style="margin:0" id="mcP"></p></div>
+        <div class="row"><label class="sr" for="mcM">Mes</label><input id="mcM" type="month" class="busca" style="width:auto"><button class="btn btn-p btn-s" type="button" id="mcNueva">+ Apuntar horas</button></div></div>
+      <div class="cols" style="margin-top:0">
+        <div class="card"><h3>Horas del mes</h3><div class="bars" id="mcBar"></div><p class="nota" id="mcNota"></p></div>
+        <div class="card"><h3>Registro</h3><div id="mcLista"></div></div>
       </div>
     </section>
 
@@ -247,6 +297,7 @@ dialog h2{font-size:1.2rem}
         <div class="two"><div class="f"><label for="mdD">Dirección</label><input id="mdD" maxlength="120" autocomplete="street-address"></div><div class="f"><label for="mdC">Código postal y ciudad</label><input id="mdC" maxlength="80"></div></div>
         <div class="two"><div class="f"><label for="mdT">Teléfono</label><input id="mdT" maxlength="20" type="tel" autocomplete="tel"></div><div class="f"><label for="mdI">IVA por defecto</label><select id="mdI"><option value="21">21 % (general)</option><option value="10">10 %</option><option value="4">4 %</option><option value="0">0 % (exento)</option></select></div></div>
         <div class="two"><div class="f"><label for="mdM">Correo de la empresa</label><input id="mdM" type="email" maxlength="120" autocomplete="email" placeholder="taller@gmail.com"><small>Desde aquí se envían las facturas.</small></div><div class="f"><label for="mdG">Correo de la gestoría</label><input id="mdG" type="email" maxlength="120" placeholder="gestoria@ejemplo.es"><small>Aquí llegan las facturas.</small></div></div>
+        <div class="f"><label for="mdW">Enlace para pedir reseñas en Google</label><input id="mdW" type="url" maxlength="300" placeholder="https://g.page/r/…/review"><small>Lo encuentras en tu Perfil de Empresa de Google → «Pedir reseñas». Se envía al cliente al entregar el coche.</small></div>
         <div class="f"><label for="mdP">Texto al pie de la factura</label><textarea id="mdP" maxlength="300"></textarea><small>Por ejemplo, la garantía o tu número de cuenta para transferencias.</small></div>
         <p class="err" id="mdE" role="alert"></p>
         <button class="btn btn-p" type="submit">Guardar mis datos</button>
@@ -268,7 +319,7 @@ dialog h2{font-size:1.2rem}
 
 <dialog id="dRep" class="big" aria-labelledby="dRepT"><h2 id="dRepT">Coche en el taller</h2>
   <div class="two"><div class="f"><label for="rpM">Matrícula</label><input id="rpM" maxlength="9" autocapitalize="characters" placeholder="1234 KLM"></div><div class="f"><label for="rpV">Coche</label><input id="rpV" maxlength="60" placeholder="Seat León"></div></div>
-  <div class="two"><div class="f"><label for="rpC">Cliente</label><input id="rpC" maxlength="60"></div><div class="f"><label for="rp4">4 últimas cifras de su teléfono</label><input id="rp4" maxlength="4" inputmode="numeric"><small>Las pide la web para aprobar el presupuesto.</small></div></div>
+  <div class="two"><div class="f"><label for="rpC">Cliente</label><input id="rpC" maxlength="60"></div><div class="f"><label for="rpT">Teléfono del cliente</label><input id="rpT" type="tel" maxlength="20" autocomplete="off"><small>Sus 4 últimas cifras sirven para aprobar el presupuesto en la web.</small></div></div>
   <div class="two"><div class="f"><label for="rpK">Mecánico</label><input id="rpK" maxlength="30"></div><div class="f"><label for="rpE">Entrega estimada</label><input id="rpE" maxlength="40" placeholder="hoy 18:30"></div></div>
   <div class="f"><label for="rpN">Nota para el cliente</label><input id="rpN" maxlength="300" placeholder="Hemos revisado los frenos…"></div>
   <div class="f"><span style="font-weight:700;font-size:.88rem">Presupuesto (IVA incluido)</span><div id="rpL"></div><button class="btn btn-s" type="button" id="rpLA" style="justify-self:start;margin-top:.4rem">+ Añadir línea</button></div>
@@ -279,7 +330,8 @@ dialog h2{font-size:1.2rem}
 
 <dialog id="dFac" class="big" aria-labelledby="dFacT"><h2 id="dFacT">Nueva factura</h2>
   <p class="small muted" style="margin:.3rem 0 0">Tus datos fiscales se ponen solos. Solo escribe el cliente, lo que le has hecho y el precio.</p>
-  <div class="two"><div class="f"><label for="faC">Nombre del cliente</label><input id="faC" maxlength="80" autocomplete="off"></div><div class="f"><label for="faV">Coche y matrícula <span class="muted">(opcional)</span></label><input id="faV" maxlength="80"></div></div>
+  <div class="two"><div class="f"><label for="faC">Nombre del cliente</label><input id="faC" maxlength="80" autocomplete="off"></div><div class="f"><label for="faV">Coche y matrícula <span class="muted">(opcional)</span></label><input id="faV" maxlength="80" placeholder="Seat León · 1234 KLM"></div></div>
+  <div class="f"><label for="faTel">Teléfono del cliente <span class="muted">(opcional, para recordatorios)</span></label><input id="faTel" type="tel" maxlength="20"></div>
   <details style="margin-top:.8rem"><summary style="cursor:pointer;font-weight:700;font-size:.9rem">Si es empresa o autónomo: NIF y dirección</summary>
     <div class="two"><div class="f"><label for="faN">NIF / CIF del cliente</label><input id="faN" maxlength="20" autocapitalize="characters"></div><div class="f"><label for="faD">Dirección del cliente</label><input id="faD" maxlength="140"></div></div></details>
   <div class="f"><span style="font-weight:700;font-size:.88rem">Lo que se le ha hecho y precio</span><div id="faL"></div><button class="btn btn-s" type="button" id="faLA" style="justify-self:start;margin-top:.4rem">+ Añadir línea</button></div>
@@ -291,7 +343,46 @@ dialog h2{font-size:1.2rem}
 </dialog>
 
 <dialog id="dVer" class="big" aria-labelledby="dVerT"><h2 id="dVerT">Factura</h2><div class="ver" id="verB"></div>
-  <div class="acc-d"><button class="btn" type="button" data-x>Cerrar</button><button class="btn btn-p" type="button" id="verP">🖨️ Imprimir</button></div></dialog>
+  <div class="acc-d"><button class="btn btn-d" type="button" id="verR" hidden>Rectificar</button><button class="btn" type="button" data-x>Cerrar</button><button class="btn btn-p" type="button" id="verP">🖨️ Imprimir</button></div></dialog>
+
+<dialog id="dRect" aria-labelledby="dRectT"><h2 id="dRectT">Factura rectificativa</h2>
+  <p class="small muted" style="margin:.3rem 0 0">Una factura emitida no se borra: se corrige con una rectificativa (serie R) que resta el importe. Si hay que cobrar otra cantidad, emite después la factura correcta.</p>
+  <div class="f"><label for="reM">Motivo</label><input id="reM" maxlength="200" placeholder="Error en el importe, devolución…"></div>
+  <div class="f"><span style="font-weight:700;font-size:.88rem">Importes que se rectifican (IVA incluido)</span><div id="reL"></div></div>
+  <div class="tot" id="reT"></div>
+  <p class="err" id="reE" role="alert"></p>
+  <div class="acc-d"><button class="btn" type="button" data-x>Cancelar</button><button class="btn btn-p" type="button" id="reG">Emitir rectificativa</button></div>
+</dialog>
+
+<dialog id="dFicha" class="big" aria-labelledby="dFichaT"><h2 id="dFichaT">Ficha</h2>
+  <div class="two"><div class="f"><label for="fiC">Cliente</label><input id="fiC" maxlength="80"></div><div class="f"><label for="fiT">Teléfono</label><input id="fiT" type="tel" maxlength="20"></div></div>
+  <div class="two"><div class="f"><label for="fiV">Coche</label><input id="fiV" maxlength="60"></div><div class="two" style="gap:0 .6rem"><div class="f"><label for="fiI">Próxima ITV</label><input id="fiI" type="date"></div><div class="f"><label for="fiK">Kilómetros</label><input id="fiK" inputmode="numeric" maxlength="7"></div></div></div>
+  <div class="f"><label for="fiN">Notas</label><input id="fiN" maxlength="400" placeholder="Prefiere recambio original, llamar por la tarde…"></div>
+  <p class="err" id="fiE" role="alert"></p>
+  <div class="row" style="margin-top:.4rem"><button class="btn btn-p btn-s" type="button" id="fiG">Guardar ficha</button><button class="btn btn-s" type="button" id="fiCita">📅 Cita</button><button class="btn btn-s" type="button" id="fiPre">📝 Presupuesto</button><button class="btn btn-s" type="button" id="fiFac">🧾 Factura</button><a class="btn btn-s" id="fiWa" target="_blank" rel="noopener">WhatsApp</a></div>
+  <div id="fiH" style="margin-top:1rem"></div>
+  <div class="acc-d"><button class="btn" type="button" data-x>Cerrar</button></div>
+</dialog>
+
+<dialog id="dPre" class="big" aria-labelledby="dPreT"><h2 id="dPreT">Presupuesto</h2>
+  <div class="two"><div class="f"><label for="peC">Cliente</label><input id="peC" maxlength="80"></div><div class="f"><label for="peT">Teléfono</label><input id="peT" type="tel" maxlength="20"></div></div>
+  <div class="two"><div class="f"><label for="peV">Coche y matrícula</label><input id="peV" maxlength="80" placeholder="Seat León · 1234 KLM"></div><div class="f"><label for="peD">Válido durante (días)</label><input id="peD" inputmode="numeric" maxlength="3" value="30"></div></div>
+  <div class="f"><span style="font-weight:700;font-size:.88rem">Trabajos y precios (IVA incluido)</span><div id="peL"></div><button class="btn btn-s" type="button" id="peLA" style="justify-self:start;margin-top:.4rem">+ Añadir línea</button></div>
+  <div class="tot" id="peTot"></div>
+  <p class="err" id="peE" role="alert"></p>
+  <div class="acc-d"><button class="btn" type="button" data-x>Cancelar</button><button class="btn btn-p" type="button" id="peG">Guardar presupuesto</button></div>
+</dialog>
+
+<dialog id="dHor" aria-labelledby="dHorT"><h2 id="dHorT">Apuntar horas</h2>
+  <div class="two"><div class="f"><label for="hoM">Mecánico</label><input id="hoM" maxlength="30" list="mecL"></div><div class="f"><label for="hoF">Día</label><input id="hoF" type="date"></div></div>
+  <datalist id="mecL"></datalist>
+  <div class="two"><div class="f"><label for="hoH">Horas</label><input id="hoH" inputmode="decimal" maxlength="5" placeholder="1,5"></div><div class="f"><label for="hoP">Matrícula <span class="muted">(opcional)</span></label><input id="hoP" maxlength="9" autocapitalize="characters"></div></div>
+  <div class="f"><label for="hoT">Trabajo</label><input id="hoT" maxlength="80" placeholder="Cambio de pastillas"></div>
+  <p class="err" id="hoE" role="alert"></p>
+  <div class="acc-d"><button class="btn" type="button" data-x>Cancelar</button><button class="btn btn-p" type="button" id="hoG">Guardar</button></div>
+</dialog>
+
+<dialog id="dRes" aria-labelledby="dResT"><h2 id="dResT">¿Pedimos una reseña?</h2><div id="dResB"></div><div class="acc-d" id="dResA"></div></dialog>
 
 <dialog id="dSv" class="big" aria-labelledby="dSvT"><h2 id="dSvT">Servicio</h2>
   <div class="two"><div class="f"><label for="svN">Nombre</label><input id="svN" maxlength="60"></div><div class="f"><label for="svC">Categoría</label><select id="svC"><option value="mant">Mantenimiento</option><option value="seg">Seguridad</option><option value="elec">Electrónica y confort</option></select></div></div>

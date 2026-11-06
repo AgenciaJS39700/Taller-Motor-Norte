@@ -22,7 +22,7 @@
 /* pie: acceso del taller */
 .ft .adm{display:inline-grid;place-items:center;width:32px;height:32px;margin-left:.3rem;border-radius:8px;color:inherit;opacity:.65;vertical-align:middle}
 .ft .adm:hover,.ft .adm:focus-visible{opacity:1;background:rgba(255,255,255,.08)}
-.ft ul a{display:inline-block;padding:.25rem 0}
+.ft ul a,.ft .lb2 a:not(.adm){display:inline-block;padding:.25rem 0}
 
 /* ---------- asistente ---------- */
 .ch-fab{position:fixed;right:16px;bottom:calc(16px + env(safe-area-inset-bottom));z-index:60;display:inline-flex;align-items:center;gap:.5rem;min-height:52px;padding:0 1.1rem 0 .9rem;border-radius:999px;border:0;background:var(--brand);color:var(--on-brand);font:700 .98rem/1 var(--font);box-shadow:0 12px 30px -10px var(--brand),0 4px 14px rgba(0,0,0,.35);cursor:pointer}
@@ -71,3 +71,32 @@
 @media print{.ch-fab,.ch-box{display:none!important}}
 .ch-on .a11y-btn,.ch-on .a11y-pan{display:none!important} /* el panel de accesibilidad no tapa el asistente */
 #cat-grid:has(.inc[open]){align-items:start} /* abrir «Qué incluye» no estira la tarjeta de al lado */
+
+/* ---------- barras compactas en pantallas pequeñas (reloj, móviles pequeños y móvil tumbado) ---------- */
+@media(max-width:360px){
+  .hdr .wrap{height:54px !important;gap:.5rem !important}
+  .hdr .lg{width:32px !important;height:32px !important;border-radius:9px !important}.hdr .lg svg{width:20px !important;height:20px !important}
+  .hdr .brand{font-size:.95rem !important;gap:.5rem !important;min-width:0 !important}
+  .hdr .brand>span:last-child{white-space:nowrap !important;overflow:hidden !important;text-overflow:ellipsis !important}
+  .hdr .ibtn{width:40px !important;height:40px !important}
+  .mjump{padding:.25rem .6rem .35rem !important;gap:.25rem !important}
+  .mjump a{padding:.25rem .6rem !important;font-size:.7rem !important}
+  section[id]{scroll-margin-top:96px !important}
+}
+@media(max-width:300px){
+  .hdr .wrap{height:44px !important;width:calc(100% - 12px) !important}
+  .hdr .lg{width:26px !important;height:26px !important;border-radius:7px !important}.hdr .lg svg{width:16px !important;height:16px !important}
+  .hdr .brand{font-size:.78rem !important}
+  .hdr .ibtn{width:36px !important;height:36px !important}.hdr .ibtn svg{width:18px !important;height:18px !important}
+  .mjump{padding:.2rem .4rem .25rem !important}
+  .mjump a{padding:.18rem .45rem !important;font-size:.62rem !important}
+  section[id]{scroll-margin-top:76px !important}
+  .mb .btn{min-height:34px !important;font-size:.72rem !important}
+  .m2{grid-template-columns:1fr !important} /* en el reloj, una tarjeta por fila para que se lea */
+  .pc .inc ul{padding-left:.9rem !important}
+}
+@media(max-height:480px) and (orientation:landscape){
+  .hdr .wrap{height:54px !important}
+  .mb{padding:.35rem .7rem calc(.35rem + env(safe-area-inset-bottom)) !important}
+  .mb .btn{min-height:40px !important}
+}
