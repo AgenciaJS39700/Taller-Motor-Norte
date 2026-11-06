@@ -76,7 +76,7 @@
           var bt = $("#aprf .btn-main"); bt.disabled = true; st.textContent = "Enviando…";
           fetch("/api/seguimiento/aprobar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ m: plate, tel4: t4 }) })
             .then(function (x) { return x.json().then(function (j) { if (!x.ok) throw new Error(j.error || "No se ha podido aprobar."); return j; }); })
-            .then(function (j) { R = j.reparacion; draw(); $("#trks").textContent = "¡Presupuesto aprobado! Ya estamos trabajando en tu coche."; })
+            .then(function (j) { R = j.reparacion; if (window.TMN_DEMO && plate === "1234KLM") clearInterval(timer); draw(); $("#trks").textContent = "¡Presupuesto aprobado! Ya estamos trabajando en tu coche."; })
             .catch(function (x) { st.textContent = /fetch|network/i.test(x.message) ? "No se ha podido conectar. Inténtalo de nuevo." : x.message; bt.disabled = false; });
         });
       } else if (r.paso === 4) {

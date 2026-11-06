@@ -132,9 +132,11 @@ async function sembrar(env) {
         filas.push([anio, num[anio], f, h, CL[Math.floor(rnd() * CL.length)], COCHE[Math.floor(rnd() * COCHE.length)] + " · " + String(1000 + Math.floor(rnd() * 8999)) + " " + ["KLM", "MNP", "LBC", "JRT", "HGF"][Math.floor(rnd() * 5)], JSON.stringify([{ c: t[0], i: total }]), base_, r2(total - base_), total, ["tarjeta", "tarjeta", "efectivo", "bizum", "transferencia"][Math.floor(rnd() * 5)], t[1]]);
       }
     }
-    for (let i = 0; i < filas.length; i += 80) {
-      await env.DB.batch(filas.slice(i, i + 80).map((x) => env.DB.prepare("INSERT OR IGNORE INTO facturas (anio, numero, fecha, hora, cliente, vehiculo, lineas, base, iva, total, pct, metodo, servicio) VALUES (?,?,?,?,?,?,?,?,?,?,21,?,?)").bind(...x)));
-    }
+    // pocas sentencias con muchas filas (datos propios de ejemplo, sin parámetros): así la primera visita gasta muy poca CPU
+    const lit = (v) => typeof v === "number" ? String(v) : "'" + String(v).replace(/'/g, "''") + "'";
+    const sentencias = [];
+    for (let i = 0; i < filas.length; i += 150) sentencias.push(env.DB.prepare("INSERT OR IGNORE INTO facturas (anio, numero, fecha, hora, cliente, vehiculo, lineas, base, iva, total, metodo, servicio, pct) VALUES " + filas.slice(i, i + 150).map((x) => "(" + x.map(lit).join(",") + ",21)").join(",")));
+    await env.DB.batch(sentencias);
   }
   const rep = await env.DB.prepare("SELECT COUNT(*) n FROM reparaciones").first();
   if (!rep.n) {
@@ -240,6 +242,8 @@ async function aprobar(request, env) {
   if (r.paso !== 2 || r.aprobado) return json({ error: "Este presupuesto ya no está pendiente de aprobar." }, 409);
   let hist = []; try { hist = JSON.parse(r.historial || "[]"); } catch {}
   const { fecha, hora } = ahoraLocal(); hist.push({ p: 3, t: fecha + " " + hora, aprobado: true });
+  // demo: el coche de ejemplo no se modifica, para que el siguiente visitante también pueda probarlo
+  if (!env.ADMIN_HASH && mt === "1234KLM") return json({ ok: true, reparacion: repPublica({ ...r, aprobado: 1, paso: 3, historial: JSON.stringify(hist) }) });
   await env.DB.prepare("UPDATE reparaciones SET aprobado = 1, paso = 3, historial = ?, actualizada = datetime('now') WHERE id = ?").bind(JSON.stringify(hist), r.id).run();
   return json({ ok: true, reparacion: repPublica({ ...r, aprobado: 1, paso: 3, historial: JSON.stringify(hist) }) });
 }
@@ -446,7 +450,8 @@ async function resumen(env, url) {
   const parcial = a <= hoy && hoy < b && periodo !== "dia";
   if (parcial) { const dias = Math.round((Date.parse(hoy) - Date.parse(a)) / 864e5); pb = sumaDias(pa, dias) < pb ? sumaDias(pa, dias) : pb; }
   const tot = (x, y) => env.DB.prepare("SELECT COUNT(*) n, COALESCE(SUM(total),0) total, COALESCE(SUM(base),0) base FROM facturas WHERE anulada = 0 AND fecha BETWEEN ? AND ?").bind(x, y).first();
-  const [act, ant] = await Promise.all([tot(a, b), tot(pa, pb)]);
+  const [act, ant, primera] = await Promise.all([tot(a, b), tot(pa, pb), env.DB.prepare("SELECT MIN(fecha) f FROM facturas WHERE anulada = 0").first()]);
+  const comparable = !!(primera && primera.f && primera.f <= pa); // si no hay datos de todo el periodo anterior, no se compara
   const desde12 = sumaDias(hoy.slice(0, 7) + "-01", -340).slice(0, 7) + "-01";
   const [dias, meses, cats, met, porDia] = await Promise.all([
     env.DB.prepare("SELECT CAST(strftime('%w', fecha) AS INTEGER) d, COUNT(*) n, SUM(total) total, COUNT(DISTINCT fecha) jornadas FROM facturas WHERE anulada = 0 AND fecha >= ? GROUP BY d").bind(desde12).all(),
@@ -463,7 +468,7 @@ async function resumen(env, url) {
   ]);
   const NOMD = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
   return json({
-    periodo, parcial, desde: a, hasta: b, actual: { n: act.n, total: r2(act.total), base: r2(act.base), medio: act.n ? r2(act.total / act.n) : 0 }, anterior: { n: ant.n, total: r2(ant.total) },
+    periodo, parcial, desde: a, hasta: b, actual: { n: act.n, total: r2(act.total), base: r2(act.base), medio: act.n ? r2(act.total / act.n) : 0 }, anterior: { n: ant.n, total: r2(ant.total), comparable },
     dias: [1, 2, 3, 4, 5, 6, 0].map((d) => { const x = (dias.results || []).find((r) => r.d === d) || { n: 0, total: 0, jornadas: 0 }; return { dia: NOMD[d], n: x.n, total: r2(x.total || 0), media: x.jornadas ? r2(x.total / x.jornadas) : 0 }; }),
     meses: (meses.results || []).map((r) => ({ mes: r.mes, n: r.n, total: r2(r.total) })),
     cats: (cats.results || []).map((r) => ({ cat: CATS[r.cat] || "Otros", n: r.n, total: r2(r.total) })),

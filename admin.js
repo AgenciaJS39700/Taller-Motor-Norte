@@ -60,8 +60,8 @@
   function resumen() {
     api("resumen?periodo=" + RP + (RREF ? "&ref=" + RREF : "")).then(function (j) {
       $("#rP").textContent = nombreP(j);
-      var a = j.actual, p = j.anterior, dif = p.total ? Math.round((a.total - p.total) / p.total * 100) : null;
-      $("#rK").innerHTML = '<div class="card kpi"><span>Facturado (IVA incl.)</span><b>' + eur0(a.total) + '</b><span class="d ' + (dif == null ? "" : dif >= 0 ? "up" : "dn") + '">' + (dif == null ? "—" : (dif >= 0 ? "▲ " : "▼ ") + Math.abs(dif) + " % frente " + (j.parcial ? "a los mismos días del periodo anterior" : "al periodo anterior")) + "</span></div>" +
+      var a = j.actual, p = j.anterior, dif = p.total && p.comparable ? Math.round((a.total - p.total) / p.total * 100) : null;
+      $("#rK").innerHTML = '<div class="card kpi"><span>Facturado (IVA incl.)</span><b>' + eur0(a.total) + '</b><span class="d ' + (dif == null ? "" : dif >= 0 ? "up" : "dn") + '">' + (dif == null ? "Sin datos del periodo anterior" : (dif >= 0 ? "▲ " : "▼ ") + Math.abs(dif) + " % frente " + (j.parcial ? "a los mismos días del periodo anterior" : "al periodo anterior")) + "</span></div>" +
         '<div class="card kpi"><span>Facturas</span><b>' + a.n + '</b><span>' + eur0(a.base) + " sin IVA</span></div>" +
         '<div class="card kpi"><span>Ticket medio</span><b>' + eur0(a.medio) + "</b><span>por factura</span></div>";
       $("#rH").innerHTML = '<div class="card kpi"><span>Citas hoy</span><b>' + j.hoy.citas + '</b><span><a href="#citas" data-ir="citas">Ver agenda</a></span></div>' +
